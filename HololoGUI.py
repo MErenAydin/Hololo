@@ -6,49 +6,62 @@ import numpy as np
 import struct
 from pyrr import Matrix44,Quaternion,Vector3
 
-class Mesh:
+class Transform:
+	def __init__(self, pos, rot, scale):
+		self.pos = pos
+		self.rot = rot
+		self.scale = scale
+
+	def move(self, pos):
+		self.pos += pos
+
+	def rotate(self, rot):
+		self.rot += rot
+	
+	def scale(self, scale):
+		self.scale = scale
+		
+
+
+
+class Mesh(Transform):
 	def __init__(self, scene, pos = (0,0,0), rot = (0,0,0), scale = 1, mesh_index = 0):
+		super().__init__(pos, rot, scale)
 		self.scene = scene
 		self.normals = scene.meshes[mesh_index].normals
 		self.vertices = scene.meshes[mesh_index].vertices
 
-		self.transform = Transform(pos, rot, scale)
-
 		vertices = np.append(self.vertices, self.normals,1)
 		flatten = [j for i in vertices for j in i]
 
-		self.context = Context(scale, flatten)
+		self.context = Context(scale, flatten , pos, light_pos = (60, -45, 50))
 
 
 	def move(self, x, y, z):
-		self.transform.pos += (x,y,z)
+		super().move((x,y,z))
 		model_mat = Matrix44.from_translation(np.array([x,y,z]))
-		self._model.write(model_mat.astype('float32').tobytes())
+		self.context._model.write(model_mat.astype('float32').tobytes())
 
 	def rotate(self, x, y, z):
-		self.transform.rot += (x,y,z)
+		super().rotate((x,y,z))
 		model_mat = Matrix44.from_euler(np.array([x,y,z]))
-		#model_mat = Matrix44.from_translation(np.array([x,y,z]))
-		self._model.write(model_mat.astype('float32').tobytes())
+		self.context._model.write(model_mat.astype('float32').tobytes())
 
-	def render(self):
+	def scale(self, scale):
+		super().scale(scale)
+		self.context._scale.value = scale
+
+	def render(self, color = (.7, .5, .3 , 1.0)):
 		proj = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
 		self.context._projection.write(proj.astype('float32').tobytes())
-
-
 		self.context._view.write(look_at.astype('float32').tobytes())
-
-
 		self.context._rotation.write(rotate.astype('float32').tobytes())
 
-		self.context.context.viewport = (0, 0, width, height)
-		self.context.context.clear(0.7, 0.7, 0.9)
-
-		self.context._color.value = (0.67, 0.49, 0.29 , 1.0)
+		self.context._color.value = color
 		self.context.vao.render(moderngl.TRIANGLES)
 
 class Context:
-	def __init__(self, scale, flatten, pos = (0,0,0), light_pos = (0,0,0), light_color = (1,1,1), v_shader_path = "Shaders/model_v.shader" , f_shader_path = "Shaders/model_f.shader"):
+	def __init__(self, scale, flatten, pos, light_pos = (0,0,0), light_color = (1,1,1), v_shader_path = "Shaders/model_v.shader" , f_shader_path = "Shaders/model_f.shader"):
 		self.context = moderngl.create_context()
 		self.program = self.context.program(
 			vertex_shader = open(v_shader_path).read(),
@@ -87,14 +100,24 @@ class Context:
 		self.context.enable(moderngl.CULL_FACE)
 		self.context.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
 		
-class Transform:
-	def __init__(self, pos, rot, scale):
-		self.pos = pos
-		self.rot = rot
-		self.scale = scale
+class Grid(Transform):
+	def __init__():
+		self.context = Context(scale, flatten , pos, light_pos = (60, -45, 50))
+
+	def render(self):
+		proj = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
+		self.context._projection.write(proj.astype('float32').tobytes())
 
 
+		self.context._view.write(look_at.astype('float32').tobytes())
 
+
+		self.context._rotation.write(rotate.astype('float32').tobytes())
+
+		
+
+		self.context._color.value = color
+		self.context.vao.render(moderngl.LINES)
 
 # Initialization of Window
 width, height = 1280, 720
@@ -103,8 +126,14 @@ window = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
 pygame.display.set_caption("Hololo")
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
-scene = pyassimp.load("Template/cube.stl")
-test_mesh = Mesh(scene)
+scene = pyassimp.load("Template/test.stl")
+test_mesh = Mesh(scene, pos = (0,0,2))
+
+scene = pyassimp.load("Template/cube_h.stl")
+cube = Mesh(scene, pos = (0,0,0))
+
+scene = pyassimp.load("Template/torus.stl")
+torus = Mesh(scene, pos = (0,0,0))
 
 
 # Main Loop
@@ -140,9 +169,12 @@ while running:
 			buttons = event.buttons
 			mul = 1
 			mod = pygame.key.get_mods()
+
+			# If pressed left or right shift transform more sensitive
 			if mod & 2 or mod & 1:
 				mul = 5
 
+			# If mouse left clicked
 			if buttons[0] == 1:
 				if abs(delta[0]) <= width - 100 and abs(delta[1]) <= height - 100:
 					rotate *= Matrix44.from_z_rotation(-delta[0]/(250.0 * mul))
@@ -155,9 +187,8 @@ while running:
 					else:
 						rot_y = np.clip(rot_y, -np.pi / 2 , np.pi / 2)
 
-					#light_mat = rotate * 0.0001
-					#light_pos = light_mat * light_pos
 
+					# Do not let the mouse pointer go out of boundaries while transforming 
 					if pos[0] >= width - 30:
 						pygame.mouse.set_pos([35,pos[1]])
 					elif pos[0] <= 30:
@@ -167,17 +198,25 @@ while running:
 					elif pos[1] <= 30:
 						pygame.mouse.set_pos([pos[0],height - 35])
 
+					# Clear the event buffer
 					pygame.event.clear()
 
+		# If mouse scroll moved
 		elif event.type == MOUSEWHEEL:
+
 			s += event.y / (30.0 * mul)
 			if s < 0.02:
 				s = 0.02
 			test_mesh.context._scale.write(struct.pack("f",s))
-
-
+			cube.context._scale.write(struct.pack("f",s))
+	
+	cube.context.context.viewport = (0, 0, width, height)
+	cube.context.context.clear(0.7, 0.7, 0.9)
 	test_mesh.render()
-
+	cube.render(color = (0,1,1, 1))
+	torus.render((1,1,0, 0.25))
+	
+	
 	pygame.display.flip()
 	pygame.time.wait(10)
 
