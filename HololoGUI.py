@@ -24,29 +24,39 @@ class Transform:
 		self.scale = scale
 
 class Mesh(Transform):
-	def __init__(self, scene, pos = (0,0,0), rot = (0,0,0), scale = 1, mesh_index = 0):
+	def __init__(self, scene, pos = (0.0,0.0,0.0), rot = (0.0,0.0,0.0), scale = 1.0, mesh_index = 0):
 		super().__init__(pos, rot, scale)
 		self.scene = scene
 		self.normals = scene.meshes[mesh_index].normals
 		self.vertices = scene.meshes[mesh_index].vertices
-		self.model_mat = Matrix44.identity()
+		self.model_mat = Matrix44.from_translation(np.array(pos))
 		
 
 		vertices = np.append(self.vertices, self.normals,1)
+		self.min_z = vertices[:,2].min()
 		flatten = [j for i in vertices for j in i]
 
 		self.context = Context(scale, flatten , pos, light_pos = (60, -45, 50))
 
-
 	def move(self, x, y, z):
 		super().move((x,y,z))
-		self.model_mat *= Matrix44.from_translation(np.array([x,y,z]))
-		self.context._model.write(self.model_mat.astype('float32').tobytes())
-
+		self.model_mat = Matrix44.from_translation(np.array([x,y,z]))
+	
+	def lean_floor(self):
+		self.model_mat = Matrix44.from_translation(np.array([self.pos[0], self.pos[1], -self.min_z]))
+	
+	def move_relative(self, x, y, z):
+		
+		super().move((float(x),float(y),float(z)))
+		self.model_mat *= Matrix44.from_translation(np.array([float(x),float(y),float(z)]))
+	
 	def rotate(self, x, y, z):
 		super().rotate((x,y,z))
+		self.model_mat = Matrix44.from_eulers(np.array([x,y,z]))
+		
+	def rotate_relative(self, x, y, z):
+		super().rotate((x,y,z))
 		self.model_mat *= Matrix44.from_eulers(np.array([x,y,z]))
-		self.context._model.write(self.model_mat.astype('float32').tobytes())
 
 	def scale(self, scale):
 		super().scale(scale)
@@ -57,19 +67,24 @@ class Mesh(Transform):
 		self.context._projection.write(proj.astype('float32').tobytes())
 		self.context._view.write(camera.look_at.astype('float32').tobytes())
 		self.context._rotation.write(rotate.astype('float32').tobytes())
-
+		self.context._model.write(self.model_mat.astype('float32').tobytes())
 		self.context._color.value = color
 		self.context.vao.render(moderngl.TRIANGLES)
 
 class Context:
 	def __init__(self):
 		pass
-	def __init__(self, scale, flatten, pos, light_pos = (0,0,0), light_color = (1,1,1), v_shader_path = "D:/Code/Python/Hololo/Shaders/model_v.shader" , f_shader_path = "D:/Code/Python/Hololo/Shaders/model_f.shader"):
+	def __init__(self, scale, flatten, pos, light_pos = (0,0,0), light_color = (1.0,1.0,1.0), v_shader_path = "D:/Code/Python/Hololo/Shaders/model_v.shader" , f_shader_path = "D:/Code/Python/Hololo/Shaders/model_f.shader"):
 		self.context = moderngl.create_context()
 		self.program = self.context.program(
 			vertex_shader = open(v_shader_path).read(),
 			fragment_shader = open(f_shader_path).read(),
 			)
+			
+		self.context.enable(moderngl.DEPTH_TEST)
+		self.context.enable(moderngl.BLEND)
+		self.context.enable(moderngl.CULL_FACE)
+		self.context.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
 
 		# Uniform 4x4 Matrices variables
 		self._model = self.program['model']
@@ -104,8 +119,8 @@ class Context:
 		self.context.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
 
 class Grid(Transform):
-	def __init__(self, size, steps, pos = (0,0,0), scale = 1, offset = 0, v_shader_path = "Shaders/grid_v.shader", f_shader_path = "Shaders/grid_f.shader"):
-
+	def __init__(self, size, steps, pos = (0.0,0.0,0.0), scale = 1.0, offset = 0, v_shader_path = "Shaders/grid_v.shader", f_shader_path = "Shaders/grid_f.shader"):
+		super().__init__(pos, (0.0,0.0,0.0), scale)
 		u = np.repeat(np.linspace(-size, size, steps), 2)
 		v = np.tile([-size, size], steps)
 		w = np.zeros(steps * 2)
@@ -118,20 +133,20 @@ class Grid(Transform):
 			fragment_shader = open(f_shader_path).read(),
 			)
 		
+		
 		self._mvp = self.program["Mvp"]
 		self._rot = self.program["Rot"]
 		self._scale = self.program["Scale"]
-
-
+		
 		self.vbo = self.main_context.buffer(vertices.astype('f4'))
 		self.vao = self.main_context.simple_vertex_array(self.program, self.vbo, 'in_vert')
 		
+		self._scale.value = 1.0
+		self._rot.write(Matrix44.identity().astype('float32').tobytes())
 
-	def render(self):
-		proj = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
-		self._mvp.write((look_at * proj).astype('float32').tobytes())
-		self._rot.write(rotate.astype('float32').tobytes())
-		seld._scale.write(scale.astype('float32').tobytes())
+	def render(self, view):
+		projection = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
+		self._mvp.write((projection * view).astype('float32').tobytes())
 		
 		self.vao.render(moderngl.LINES)
 
@@ -188,8 +203,23 @@ window = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
 pygame.display.set_caption("Hololo")
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
+mesh_list = []
+
+scene = pyassimp.load("Template/display_area.stl")
+mesh_list.append(Mesh(scene, pos = (0.0,0.0,0.0)))
+
 scene = pyassimp.load("Template/test.stl")
-test_mesh = Mesh(scene, pos = (0,0,30))
+mesh_list.append(Mesh(scene, pos = (0.0,-2.0,0.0)))
+
+scene = pyassimp.load("Template/torus.stl")
+mesh_list.append(Mesh(scene, pos = (-2.0,0.0,0.0)))
+scene = pyassimp.load("Template/cube_h.stl")
+mesh_list.append(Mesh(scene, pos = (2.0,0.0,0.0)))
+scene = pyassimp.load("Template/cube.stl")
+mesh_list.append(Mesh(scene, pos = (0.0,2.0,0.0)))
+
+
+grid = Grid(5,11)
 
 init_camera_pos = (10.0, 0.0, 2.5)
 origin = (0.0,0.0,0.0)
@@ -273,12 +303,17 @@ while running:
 		elif event.type == MOUSEWHEEL:
 				
 			camera.distance(event.y)
-			#test_mesh.context._scale.write(struct.pack("f",s))
 	
-	test_mesh.context.context.viewport = (0, 0, width, height)
-	test_mesh.context.context.clear(0.7, 0.7, 0.9)
-	test_mesh.render()
+	grid.main_context.viewport = (0, 0, width, height)
+	grid.main_context.clear(0.7, 0.7, 0.9)
+	grid.render(camera.look_at)
 	
+	
+	for i,mesh in enumerate(mesh_list):
+		if i != 0:
+			mesh.render(color = (.7, .5, i * 0.2 , 1.0))
+	
+	mesh_list[0].render(color = (0.0, 0.8 , 0.0 , 0.25))
 	
 	pygame.display.flip()
 	pygame.time.wait(10)
