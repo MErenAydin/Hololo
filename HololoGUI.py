@@ -5,6 +5,8 @@ import moderngl
 import numpy as np
 import struct
 from pyrr import Matrix44,Quaternion,Vector3
+import pygame_gui
+from PIL import Image
 
 
 
@@ -60,7 +62,7 @@ class Mesh(Transform):
 
 	def scale(self, scale):
 		super().scale(scale)
-		self.context._scale.value = scale
+		context._scale.value = scale
 
 	def render(self, color = (.7, .5, .3 , 1.0)):
 		proj = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
@@ -75,16 +77,15 @@ class Context:
 	def __init__(self):
 		pass
 	def __init__(self, scale, flatten, pos, light_pos = (0,0,0), light_color = (1.0,1.0,1.0), v_shader_path = "D:/Code/Python/Hololo/Shaders/model_v.shader" , f_shader_path = "D:/Code/Python/Hololo/Shaders/model_f.shader"):
-		self.context = moderngl.create_context()
-		self.program = self.context.program(
+		self.program = context.program(
 			vertex_shader = open(v_shader_path).read(),
 			fragment_shader = open(f_shader_path).read(),
 			)
 			
-		self.context.enable(moderngl.DEPTH_TEST)
-		self.context.enable(moderngl.BLEND)
-		self.context.enable(moderngl.CULL_FACE)
-		self.context.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+		context.enable(moderngl.DEPTH_TEST)
+		context.enable(moderngl.BLEND)
+		context.enable(moderngl.CULL_FACE)
+		context.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
 
 		# Uniform 4x4 Matrices variables
 		self._model = self.program['model']
@@ -110,13 +111,13 @@ class Context:
 
 		self._scale.write(struct.pack("f",scale))
 
-		self.vbo = self.context.buffer(struct.pack("{0:d}f".format(len(flatten)),*flatten))
-		self.vao = self.context.simple_vertex_array(self.program, self.vbo, 'aPos','aNormal')
+		self.vbo = context.buffer(struct.pack("{0:d}f".format(len(flatten)),*flatten))
+		self.vao = context.simple_vertex_array(self.program, self.vbo, 'aPos','aNormal')
 
-		self.context.enable(moderngl.DEPTH_TEST)
-		self.context.enable(moderngl.BLEND)
-		self.context.enable(moderngl.CULL_FACE)
-		self.context.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+		context.enable(moderngl.DEPTH_TEST)
+		context.enable(moderngl.BLEND)
+		context.enable(moderngl.CULL_FACE)
+		context.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
 
 class Grid(Transform):
 	def __init__(self, size, steps, pos = (0.0,0.0,0.0), scale = 1.0, offset = 0, v_shader_path = "Shaders/grid_v.shader", f_shader_path = "Shaders/grid_f.shader"):
@@ -127,8 +128,7 @@ class Grid(Transform):
 		w.fill(offset)
 		vertices = np.concatenate([np.dstack([u, v, w]), np.dstack([v, u, w])])
 
-		self.main_context = moderngl.create_context()
-		self.program = self.main_context.program(
+		self.program = context.program(
 			vertex_shader = open(v_shader_path).read(),
 			fragment_shader = open(f_shader_path).read(),
 			)
@@ -138,8 +138,8 @@ class Grid(Transform):
 		self._rot = self.program["Rot"]
 		self._scale = self.program["Scale"]
 		
-		self.vbo = self.main_context.buffer(vertices.astype('f4'))
-		self.vao = self.main_context.simple_vertex_array(self.program, self.vbo, 'in_vert')
+		self.vbo = context.buffer(vertices.astype('f4'))
+		self.vao = context.simple_vertex_array(self.program, self.vbo, 'in_vert')
 		
 		self._scale.value = 1.0
 		self._rot.write(Matrix44.identity().astype('float32').tobytes())
@@ -195,12 +195,51 @@ class Camera(Transform):
 		self.radius =  np.sqrt((self.pos[0] - self.look_point[0]) ** 2 + (self.pos[1] - self.look_point[1]) ** 2 + (self.pos[2] - self.look_point[2]) ** 2)
 		self.update()
 	
+class Texture(Transform):
+	def __init__(self, rect_pos, rect_size, texture, v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
+		self.rect_pos = rect_pos
+		self.rect_size = rect_size
+		self.texture = texture
+		
+		self.vertices = np.array([[rect_pos[0],rect_pos[1]],[rect_pos[0],rect_pos[1] + rect_size[1]],[rect_pos[0]+rect_size[0],rect_pos[1]],
+								  [rect_pos[0]+ rect_size[0],rect_pos[1] + rect_size[1]],[rect_pos[0],rect_pos[1] + rect_size[1]],[rect_pos[0]+rect_size[0],rect_pos[1]]])
+		
+		self.texture_coords = np.array([[0.0,0.0],[0.0,1.0],[1.0,0.0],[1.0,1.0],[1.0,0.0],[0.0,1.0]])
+		
+		self.program = context.program(
+			vertex_shader = open(v_shader_path).read(),
+			fragment_shader = open(f_shader_path).read(),
+			)
+		
+		context.texture(texture.size)
+		
+		self.w_size = self.program["w_size"]
+		
+		self.vbo = context.buffer(self.vertices.astype('f4'))
+		self.vao = context.simple_vertex_array(self.program, self.vbo, 'in_vert')
+	
+	def render(self):
+		self.vao.render(moderngl.TRIANGLES)
+		
+		
+		
 # Initialization of Window
 
 width, height = 1280, 720
 pygame.init()
+
+font = pygame.font.SysFont(None, 24)
+img = font.render('hello', True, (0.0,0.0,1.0))
+
+
+
 window = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
 pygame.display.set_caption("Hololo")
+
+context = moderngl.create_context()
+
+texture = Texture((0,0), (1000,500), img)
+
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
 mesh_list = []
@@ -240,15 +279,23 @@ rot_y = -0.25
 rot_z = 0
 s = 1.0
 
-running = True
-turn_right = turn_left = False
+clock = pygame.time.Clock()
 
+running = True
 
 while running:
 
+	time_delta = clock.tick(60)/1000.0
+	
+	
 	for event in pygame.event.get():
 		if event.type == pygame.QUIT:
 			running = False
+			
+		elif event.type == pygame.USEREVENT:
+			if event.user_type == pygame_gui.UI_BUTTON_PRESSED:
+				if event.ui_element == hello_button:
+					print('Hello World!')
 
 		elif event.type == KEYDOWN:
 			key = event.key
@@ -304,8 +351,9 @@ while running:
 				
 			camera.distance(event.y)
 	
-	grid.main_context.viewport = (0, 0, width, height)
-	grid.main_context.clear(0.7, 0.7, 0.9)
+	
+	context.viewport = (0, 0, width, height)
+	context.clear(0.7, 0.7, 0.9)
 	grid.render(camera.look_at)
 	
 	
@@ -315,6 +363,7 @@ while running:
 	
 	mesh_list[0].render(color = (0.0, 0.8 , 0.0 , 0.25))
 	
+	texture.render()
 	pygame.display.flip()
 	pygame.time.wait(10)
 
