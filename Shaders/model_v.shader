@@ -17,7 +17,7 @@ uniform mat4 projection;
 
 void main()
 {
-	gl_Position = projection * view * rotation * vec4(aPos * scale, 1.0);
+	gl_Position = projection * view * model * rotation * vec4(aPos * scale, 1.0);
 
 	// gouraud shading
 	// ------------------------
