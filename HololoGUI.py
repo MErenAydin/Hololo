@@ -14,7 +14,7 @@ class Transform:
 	def __init__(self, pos, rot, scale):
 		self.pos = list(pos)
 		self.rot = list(rot)
-		self.scale = scale
+		self.scale_val = scale
 
 	def move(self, pos):
 		self.pos = [a+b for a,b in zip(pos,self.pos)]
@@ -196,27 +196,53 @@ class Camera(Transform):
 		self.update()
 	
 class Texture(Transform):
-	def __init__(self, rect_pos, rect_size, texture, v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
+	def __init__(self, rect_pos, image, v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
 		self.rect_pos = rect_pos
-		self.rect_size = rect_size
-		self.texture = texture
+		#self.rect_size = rect_size
+		self.img = image
 		
-		self.vertices = np.array([[rect_pos[0],rect_pos[1]],[rect_pos[0],rect_pos[1] + rect_size[1]],[rect_pos[0]+rect_size[0],rect_pos[1]],
-								  [rect_pos[0]+ rect_size[0],rect_pos[1] + rect_size[1]],[rect_pos[0],rect_pos[1] + rect_size[1]],[rect_pos[0]+rect_size[0],rect_pos[1]]])
+		#self.vertices = np.array([[rect_pos[0],rect_pos[1]],[rect_pos[0],rect_pos[1] + rect_size[1]],[rect_pos[0]+rect_size[0],rect_pos[1]],
+		#						  [rect_pos[0]+ rect_size[0],rect_pos[1] + rect_size[1]],[rect_pos[0],rect_pos[1] + rect_size[1]],[rect_pos[0]+rect_size[0],rect_pos[1]]])
 		
-		self.texture_coords = np.array([[0.0,0.0],[0.0,1.0],[1.0,0.0],[1.0,1.0],[1.0,0.0],[0.0,1.0]])
+		#self.texture_coords = np.array([[0.0,0.0],[0.0,1.0],[1.0,0.0],[1.0,1.0],[1.0,0.0],[0.0,1.0]])
+		
+		rect_pos = (100, 100)
+		
+		vertices = np.array([
+			rect_pos[0], rect_pos[1], 0.0,1.0,
+			rect_pos[0] + image.size[0], rect_pos[1], 1.0,1.0,
+			rect_pos[0], rect_pos[1] + image.size[1], 0.0,0.0,
+			rect_pos[0], rect_pos[1] + image.size[1], 0.0,0.0,
+			rect_pos[0] + image.size[0], rect_pos[1], 1.0,1.0,
+			rect_pos[0] + image.size[0], rect_pos[1] + image.size[1] ,1.0 ,0.0,
+			
+		])
+		
+		# vertices = np.array([
+            # x, y, tx, ty
+            # 100.0, 500.0, 0.5, 1.0,
+            # 500.0, 100.0, 0.0, 0.0,
+            # 500.0, 500.0, 1.0, 0.0,
+        # ])
 		
 		self.program = context.program(
 			vertex_shader = open(v_shader_path).read(),
 			fragment_shader = open(f_shader_path).read(),
 			)
+			
+		#self.program['RenderMode'].value = moderngl.TEXTURE_MODE
 		
-		context.texture(texture.size)
+		self.texture = context.texture(self.img.size, 4, self.img.tobytes())
+		
+		self.texture.use(0)
 		
 		self.w_size = self.program["w_size"]
+		self.w_size.write(np.array([width,height]).astype('f4').tobytes())
 		
-		self.vbo = context.buffer(self.vertices.astype('f4'))
-		self.vao = context.simple_vertex_array(self.program, self.vbo, 'in_vert')
+		self.vbo = context.buffer(vertices.astype('f4').tobytes())
+		self.vao = context.simple_vertex_array(self.program, self.vbo, 'in_vert', 'in_text')
+		
+		
 	
 	def render(self):
 		self.vao.render(moderngl.TRIANGLES)
@@ -228,9 +254,13 @@ class Texture(Transform):
 width, height = 1280, 720
 pygame.init()
 
-font = pygame.font.SysFont(None, 24)
-img = font.render('hello', True, (0.0,0.0,1.0))
+font = pygame.font.SysFont("bauhaus 93", 50)
+img = font.render('The quick brown fox jumps over the lazy dog', True, (0.0,0.0,1.0))
 
+string_image = pygame.image.tostring(img, "RGBA", False)
+img = Image.frombytes("RGBA", img.get_size(), string_image)
+#img.save("hello.png", "PNG")
+#img.show()
 
 
 window = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
@@ -238,7 +268,7 @@ pygame.display.set_caption("Hololo")
 
 context = moderngl.create_context()
 
-texture = Texture((0,0), (1000,500), img)
+texture = Texture((0,0), img)
 
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
@@ -360,6 +390,7 @@ while running:
 	for i,mesh in enumerate(mesh_list):
 		if i != 0:
 			mesh.render(color = (.7, .5, i * 0.2 , 1.0))
+		mesh.lean_floor()
 	
 	mesh_list[0].render(color = (0.0, 0.8 , 0.0 , 0.25))
 	
@@ -368,6 +399,7 @@ while running:
 	pygame.time.wait(10)
 
 	
+
 
 
 pygame.quit()
