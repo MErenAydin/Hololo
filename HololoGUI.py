@@ -6,9 +6,9 @@ import numpy as np
 import struct
 from pyrr import Matrix44,Quaternion,Vector3
 import pygame_gui
-from PIL import Image
+from PIL import Image, ImageDraw
 
-
+width, height = 1280, 720
 
 class Transform:
 	def __init__(self, pos, rot, scale):
@@ -195,44 +195,30 @@ class Camera(Transform):
 		self.radius =  np.sqrt((self.pos[0] - self.look_point[0]) ** 2 + (self.pos[1] - self.look_point[1]) ** 2 + (self.pos[2] - self.look_point[2]) ** 2)
 		self.update()
 	
-class Texture(Transform):
-	def __init__(self, rect_pos, image, v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
-		self.rect_pos = rect_pos
-		#self.rect_size = rect_size
-		self.img = image
+class Viewport():
+	
+	def __init__(self, v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
 		
-		#self.vertices = np.array([[rect_pos[0],rect_pos[1]],[rect_pos[0],rect_pos[1] + rect_size[1]],[rect_pos[0]+rect_size[0],rect_pos[1]],
-		#						  [rect_pos[0]+ rect_size[0],rect_pos[1] + rect_size[1]],[rect_pos[0],rect_pos[1] + rect_size[1]],[rect_pos[0]+rect_size[0],rect_pos[1]]])
+		self.image = Image.new("RGBA", (width, height), (0,0,0,0))
 		
-		#self.texture_coords = np.array([[0.0,0.0],[0.0,1.0],[1.0,0.0],[1.0,1.0],[1.0,0.0],[0.0,1.0]])
-		
-		rect_pos = (100, 100)
 		
 		vertices = np.array([
-			rect_pos[0], rect_pos[1], 0.0,1.0,
-			rect_pos[0] + image.size[0], rect_pos[1], 1.0,1.0,
-			rect_pos[0], rect_pos[1] + image.size[1], 0.0,0.0,
-			rect_pos[0], rect_pos[1] + image.size[1], 0.0,0.0,
-			rect_pos[0] + image.size[0], rect_pos[1], 1.0,1.0,
-			rect_pos[0] + image.size[0], rect_pos[1] + image.size[1] ,1.0 ,0.0,
-			
+			0.0, 0.0, 0.0, 1.0,
+			width, 0.0, 1.0, 1.0,
+			0.0, height, 0.0, 0.0,
+			0.0, height, 0.0, 0.0,
+			width, 0.0, 1.0, 1.0,
+			width, height, 1.0 ,0.0
 		])
 		
-		# vertices = np.array([
-            # x, y, tx, ty
-            # 100.0, 500.0, 0.5, 1.0,
-            # 500.0, 100.0, 0.0, 0.0,
-            # 500.0, 500.0, 1.0, 0.0,
-        # ])
-		
-		self.program = context.program(
+		self.program = context.program( 
 			vertex_shader = open(v_shader_path).read(),
 			fragment_shader = open(f_shader_path).read(),
 			)
 			
 		#self.program['RenderMode'].value = moderngl.TEXTURE_MODE
 		
-		self.texture = context.texture(self.img.size, 4, self.img.tobytes())
+		self.texture = context.texture(self.image.size, 4, self.image.tobytes())
 		
 		self.texture.use(0)
 		
@@ -242,25 +228,57 @@ class Texture(Transform):
 		self.vbo = context.buffer(vertices.astype('f4').tobytes())
 		self.vao = context.simple_vertex_array(self.program, self.vbo, 'in_vert', 'in_text')
 		
-		
+	def set_image(self, img):
+		self.image =  img
+		self.texture = context.texture(self.image.size, 4, self.image.tobytes())
+		self.texture.use(0)
 	
 	def render(self):
 		self.vao.render(moderngl.TRIANGLES)
 		
+class Button():
+
+	def __init__(self, rect_pos, rect_size, button_text, viewport, button_image_path = None, text_color = (0, 0, 0) , button_color = (220, 220, 220, 255), width = 3 , prefered_height = 80):
 		
+		
+		if button_image_path != None:
+			button_image = Image.open(button_image_path, "RGBA")
+		else:
+			button_image = Image.new("RGBA", rect_size, button_color)
+			draw = ImageDraw.Draw(button_image)
+			draw.rectangle(((width // 2 - 1, width // 2 - 1), (rect_size[0] - (width // 2), rect_size[1] - (width // 2))), fill= button_color, outline = (0,0,0,255), width = 4)
+			button_image = button_image.resize(rect_size)
+			
+		img = font.render(button_text, True, text_color)
+		string_image = pygame.image.tostring(img, "RGBA", False)
+		img = Image.frombytes("RGBA", img.get_size(), string_image)
+		wpercent = (prefered_height/float(img.size[0]))
+		hsize = int((float(img.size[1])*float(wpercent)))
+		img = img.resize((prefered_height,hsize), Image.ANTIALIAS)
+		
+		offset = (rect_size[0] // 2 - (img.size[0] // 2), rect_size[1] // 2 - (img.size[1] // 2))
+		button_image.paste(img, offset, img)
+		
+		result = viewport.image.copy()
+		result.paste(button_image, rect_pos)
+		viewport.set_image(result)
+		#viewport.image = viewport.image.paste(button_image, rect_pos)
+	
 		
 # Initialization of Window
 
-width, height = 1280, 720
+
 pygame.init()
 
-font = pygame.font.SysFont("bauhaus 93", 50)
-img = font.render('The quick brown fox jumps over the lazy dog', True, (0.0,0.0,1.0))
+#[print(a) for a in sorted(pygame.font.get_fonts())]
 
-string_image = pygame.image.tostring(img, "RGBA", False)
-img = Image.frombytes("RGBA", img.get_size(), string_image)
-#img.save("hello.png", "PNG")
-#img.show()
+font = pygame.font.SysFont("D:\Code\Python\Hololo\OpenSans-Light.ttf", 50)
+font = pygame.font.Font("D:\Code\Python\Hololo\Font\OpenSans-Regular.ttf", 50)
+# img = font.render('The quick brown fox jumps over the lazy dog', True, (0,0,255))
+
+# string_image = pygame.image.tostring(img, "RGBA", False)
+# img = Image.frombytes("RGBA", img.get_size(), string_image)
+
 
 
 window = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
@@ -268,8 +286,15 @@ pygame.display.set_caption("Hololo")
 
 context = moderngl.create_context()
 
-texture = Texture((0,0), img)
+#texture = Texture((0,0), img)
 
+viewport = Viewport()
+
+btn = Button((100,100), (100, 40), "Render", viewport, prefered_height = 60)
+
+btn2 = Button((100,160), (100, 40), "Quit", viewport, prefered_height = 60)
+
+btn3 = Button((100,220), (100, 40), "Bişiler", viewport, prefered_height = 60)
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
 mesh_list = []
@@ -394,7 +419,7 @@ while running:
 	
 	mesh_list[0].render(color = (0.0, 0.8 , 0.0 , 0.25))
 	
-	texture.render()
+	viewport.render()
 	pygame.display.flip()
 	pygame.time.wait(10)
 
