@@ -228,9 +228,9 @@ class Viewport():
 		self.vbo = context.buffer(vertices.astype('f4').tobytes())
 		self.vao = context.simple_vertex_array(self.program, self.vbo, 'in_vert', 'in_text')
 		
-	def set_image(self, img):
-		self.image =  img
-		self.texture = context.texture(self.image.size, 4, self.image.tobytes())
+	def add_image(self, img, pos):
+		self.image.paste(img, pos)
+		self.texture.write(self.image.tobytes())
 		self.texture.use(0)
 	
 	def render(self):
@@ -238,15 +238,29 @@ class Viewport():
 		
 class Button():
 
-	def __init__(self, rect_pos, rect_size, button_text, viewport, button_image_path = None, text_color = (0, 0, 0) , button_color = (220, 220, 220, 255), width = 3 , prefered_height = 80):
+	def __init__(self, rect_pos, rect_size, button_text, viewport, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , prefered_height = 80, three_D = True):
 		
 		
-		if button_image_path != None:
-			button_image = Image.open(button_image_path, "RGBA")
+		if image_path != None:
+			button_image = Image.open(image_path, "RGBA")
 		else:
-			button_image = Image.new("RGBA", rect_size, button_color)
+			button_image = Image.new("RGBA", rect_size, bg_color)
 			draw = ImageDraw.Draw(button_image)
-			draw.rectangle(((width // 2 - 1, width // 2 - 1), (rect_size[0] - (width // 2), rect_size[1] - (width // 2))), fill= button_color, outline = (0,0,0,255), width = 4)
+			if three_D:
+				lc = [a + 30 for a in bg_color[0:3]]
+				lc.append(bg_color[3])
+				dc = [a - 30 for a in bg_color[0:3]]
+				dc.append(bg_color[3])
+				f = list(bg_color[0:3])
+				f.append(bg_color[3])
+				
+				draw.rectangle(((0, 0),(button_image.size[0] - 1, button_image.size[1] - 1)), fill = tuple(f), outline = tuple(dc), width = o_width)
+				draw.polygon(((0,0), (0,button_image.size[1] - 1), (o_width - 1, button_image.size[1] - o_width  ), (o_width - 1, o_width - 1), (button_image.size[0] - o_width, o_width - 1 ),(button_image.size[0] - 1, 0)), fill = tuple(lc))
+					
+			
+			else:
+				draw.rectangle(((o_width // 2 - 1, o_width // 2 - 1), (rect_size[0] - (o_width // 2), rect_size[1] - (o_width // 2))), fill= bg_color, outline = (0,0,0,255), width = o_width)
+			
 			button_image = button_image.resize(rect_size)
 			
 		img = font.render(button_text, True, text_color)
@@ -259,12 +273,71 @@ class Button():
 		offset = (rect_size[0] // 2 - (img.size[0] // 2), rect_size[1] // 2 - (img.size[1] // 2))
 		button_image.paste(img, offset, img)
 		
-		result = viewport.image.copy()
-		result.paste(button_image, rect_pos)
-		viewport.set_image(result)
-		#viewport.image = viewport.image.paste(button_image, rect_pos)
+		
+		viewport.add_image(button_image, rect_pos)
+
+	
+class TextInput():
+	def __init__(self, rect_pos, rect_size, viewport, text = "", image_path = None, text_color = (0, 0, 0) , bg_color = (255, 255, 255, 255), o_width = 2):
+		self.text_color = text_color
+		self.__text = " "
+		self.rect_size = rect_size
+		self.rect_pos = rect_pos
+		self.bg_color = bg_color
+		self.width = o_width
+		self.image_path = image_path
+		
+		if image_path != None:
+			self.text_input_image = Image.open(image_path, "RGBA")
+		else:
+			self.text_input_image = Image.new("RGBA", rect_size, bg_color)
+			draw = ImageDraw.Draw(self.text_input_image)
+			draw.rectangle(((o_width // 2 - 1, o_width // 2 - 1), (rect_size[0] - (o_width // 2), rect_size[1] - (o_width // 2))), fill= bg_color, outline = (0,0,0,255), width = o_width)
+			self.text_input_image = self.text_input_image.resize(rect_size)
+		
+		viewport.add_image(self.text_input_image, rect_pos)
+		
+	def clear(self):
+		if self.image_path != None:
+			self.text_input_image = Image.open(self.image_path, "RGBA")
+		else:
+			self.text_input_image = Image.new("RGBA", self.rect_size, self.bg_color)
+			draw = ImageDraw.Draw(self.text_input_image)
+			draw.rectangle(((self.width // 2 - 1, self.width // 2 - 1), (self.rect_size[0] - (self.width // 2), self.rect_size[1] - (self.width // 2))), fill= self.bg_color, outline = (0,0,0,255), width = self.width)
+			self.text_input_image = self.text_input_image.resize(self.rect_size)
+	
+	def set_text(self, value):
+		self.__text = value
+		
+		self.clear()
+		
+		img = font.render(self.__text, True, self.text_color)
+		string_image = pygame.image.tostring(img, "RGBA", False)
+		img = Image.frombytes("RGBA", img.get_size(), string_image)
+		
+		h = self.rect_size[1] -2 * self.width
+		aspect = img.size[0] / (3 * h)
+		w = int(img.size[1] * aspect)
+		img = img.resize((w,h), Image.ANTIALIAS)
+		
+		offset = (self.width, self.rect_size[1] // 2 - (img.size[1] // 2))
+		if w >= self.text_input_image.size[0] - 20:
+			img = img.crop((img.size[0] - self.text_input_image.size[0] + (2 * self.width), 0, img.size[0], img.size[1]))
+		self.text_input_image.paste(img, offset, img)
+		
+		viewport.add_image(self.text_input_image, self.rect_pos)
+		
+		
+	def get_text(self):
+		return self.__text
+		
+	text = property(get_text, set_text)
+	
 	
 		
+		
+
+
 # Initialization of Window
 
 
@@ -295,6 +368,8 @@ btn = Button((100,100), (100, 40), "Render", viewport, prefered_height = 60)
 btn2 = Button((100,160), (100, 40), "Quit", viewport, prefered_height = 60)
 
 btn3 = Button((100,220), (100, 40), "Bişiler", viewport, prefered_height = 60)
+
+ti = TextInput((100,280), (200, 40), viewport)
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
 mesh_list = []
@@ -363,6 +438,18 @@ while running:
 				turn_left = True
 			if key == K_RIGHT:
 				turn_right = True
+				
+			if key == K_a:
+				ti.text += "a"
+				
+			if key == K_s:
+				ti.text += "s"
+				
+			if key == K_BACKSPACE:
+				if (len(ti.text) > 1):
+					ti.text = ti.text[:-1]
+				else:
+					ti.text = " "
 
 		elif event.type == KEYUP:
 			if key == K_LEFT:
