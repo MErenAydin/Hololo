@@ -276,7 +276,6 @@ class Button():
 		
 		viewport.add_image(button_image, rect_pos)
 
-	
 class TextInput():
 	def __init__(self, rect_pos, rect_size, viewport, text = "", image_path = None, text_color = (0, 0, 0) , bg_color = (255, 255, 255, 255), o_width = 2):
 		self.text_color = text_color
@@ -333,9 +332,6 @@ class TextInput():
 		
 	text = property(get_text, set_text)
 	
-	
-		
-		
 
 
 # Initialization of Window
@@ -438,18 +434,24 @@ while running:
 				turn_left = True
 			if key == K_RIGHT:
 				turn_right = True
-				
-			if key == K_a:
-				ti.text += "a"
-				
-			if key == K_s:
-				ti.text += "s"
-				
+			
+			if key == K_SPACE:
+				ti.text += " "
+			
 			if key == K_BACKSPACE:
 				if (len(ti.text) > 1):
 					ti.text = ti.text[:-1]
 				else:
 					ti.text = " "
+			
+			key_string = pygame.key.name(event.key)
+			
+			if len(key_string) == 1:
+				ti.text += key_string
+			else:
+				if "[" in key_string:
+					if len(key_string.split("[")[1].split("]")[0]) == 1:
+						ti.text += key_string.split("[")[1].split("]")[0]
 
 		elif event.type == KEYUP:
 			if key == K_LEFT:
