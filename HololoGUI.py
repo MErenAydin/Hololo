@@ -491,7 +491,6 @@ btn2 = Button((100,160), (100, 40), "Quit", viewport, prefered_height = 60)
 
 btn3 = Button((100,220), (100, 40), "Bişiler", viewport, prefered_height = 60)
 
-ti = TextInput((100,280), (200, 40), viewport)
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
 mesh_list = []
@@ -566,29 +565,6 @@ while running:
 			if key == K_RIGHT:
 				turn_right = True
 			
-			if key == K_SPACE:
-				ti.text += " "
-			
-			if key == K_BACKSPACE:
-				if (len(ti.text) > 1):
-					ti.text = ti.text[:-1]
-				else:
-					ti.text = " "
-			
-			key_string = pygame.key.name(event.key)
-			
-			if len(key_string) == 1:
-				ti.text += key_string
-			else:
-				if "[" in key_string:
-					if len(key_string.split("[")[1].split("]")[0]) == 1:
-						ti.text += key_string.split("[")[1].split("]")[0]
-
-		elif event.type == KEYUP:
-			if key == K_LEFT:
-				turn_left = False
-			if key == K_RIGHT:
-				turn_right = False
 
 		elif event.type == MOUSEMOTION:
 
@@ -619,7 +595,7 @@ while running:
 						pygame.mouse.set_pos([pos[0],height - 35])
 
 					# Clear the event buffer
-					pygame.event.clear()
+					#pygame.event.clear()
 
 		# If mouse scroll moved
 		elif event.type == MOUSEWHEEL:
