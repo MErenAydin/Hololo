@@ -8,6 +8,7 @@ from pyrr import Matrix44,Quaternion,Vector3
 import pygame_gui
 from PIL import Image, ImageDraw
 
+
 width, height = 1280, 720
 
 class Transform:
@@ -197,10 +198,10 @@ class Camera(Transform):
 	
 class Viewport():
 	
-	def __init__(self, v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
+	def __init__(self, manager, v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
 		
 		self.image = Image.new("RGBA", (width, height), (0,0,0,0))
-		
+		self.manager = manager
 		
 		vertices = np.array([
 			0.0, 0.0, 0.0, 1.0,
@@ -238,102 +239,225 @@ class Viewport():
 		
 class Button():
 
-	def __init__(self, rect_pos, rect_size, button_text, viewport, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , prefered_height = 80, three_D = True):
+	def __init__(self, rect_pos, rect_size, button_text, viewport, handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , prefered_height = 80, three_D = True):
 		
+		self.__hover = False
+		self.__clicked = False
 		
-		if image_path != None:
-			button_image = Image.open(image_path, "RGBA")
+		self.rect_pos = rect_pos
+		self.rect_size = rect_size
+		self.button_text = button_text
+		self.viewport = viewport
+		self.image_path = image_path
+		self.text_color = text_color
+		self.bg_color = bg_color
+		self.width = o_width
+		self.prefered_height = prefered_height
+		self.three_D = three_D
+		self.handler = handler
+		
+		viewport.manager.buttons[button_text] = self
+		
+		viewport.add_image(self.get_image(self.bg_color, self.text_color), self.rect_pos)
+		
+	def get_image(self, bg_color , text_color, clicked = False):
+		if self.image_path != None:
+			button_image = Image.open(self.image_path, "RGBA")
 		else:
-			button_image = Image.new("RGBA", rect_size, bg_color)
+			button_image = Image.new("RGBA", self.rect_size, bg_color)
 			draw = ImageDraw.Draw(button_image)
-			if three_D:
+			if self.three_D:
 				lc = [a + 30 for a in bg_color[0:3]]
 				lc.append(bg_color[3])
 				dc = [a - 30 for a in bg_color[0:3]]
 				dc.append(bg_color[3])
+				if clicked:
+					temp = lc
+					lc = dc
+					dc = temp
 				f = list(bg_color[0:3])
 				f.append(bg_color[3])
 				
-				draw.rectangle(((0, 0),(button_image.size[0] - 1, button_image.size[1] - 1)), fill = tuple(f), outline = tuple(dc), width = o_width)
-				draw.polygon(((0,0), (0,button_image.size[1] - 1), (o_width - 1, button_image.size[1] - o_width  ), (o_width - 1, o_width - 1), (button_image.size[0] - o_width, o_width - 1 ),(button_image.size[0] - 1, 0)), fill = tuple(lc))
+				draw.rectangle(((0, 0),(button_image.size[0] - 1, button_image.size[1] - 1)), fill = tuple(f), outline = tuple(dc), width = self.width)
+				draw.polygon(((0,0), (0,button_image.size[1] - 1), (self.width - 1, button_image.size[1] - self.width  ), (self.width - 1, self.width - 1), (button_image.size[0] - self.width, self.width - 1 ),(button_image.size[0] - 1, 0)), fill = tuple(lc))
 					
 			
 			else:
-				draw.rectangle(((o_width // 2 - 1, o_width // 2 - 1), (rect_size[0] - (o_width // 2), rect_size[1] - (o_width // 2))), fill= bg_color, outline = (0,0,0,255), width = o_width)
+				draw.rectangle(((self.width // 2 - 1, self.width // 2 - 1), (self.rect_size[0] - (self.width // 2), self.rect_size[1] - (self.width // 2))), fill= self.bg_color, outline = (0,0,0,255), width = self.width)
 			
-			button_image = button_image.resize(rect_size)
+			button_image = button_image.resize(self.rect_size)
 			
-		img = font.render(button_text, True, text_color)
+		img = font.render(self.button_text, True, text_color)
 		string_image = pygame.image.tostring(img, "RGBA", False)
 		img = Image.frombytes("RGBA", img.get_size(), string_image)
-		wpercent = (prefered_height/float(img.size[0]))
+		wpercent = (self.prefered_height/float(img.size[0]))
 		hsize = int((float(img.size[1])*float(wpercent)))
-		img = img.resize((prefered_height,hsize), Image.ANTIALIAS)
+		img = img.resize((self.prefered_height,hsize), Image.ANTIALIAS)
 		
-		offset = (rect_size[0] // 2 - (img.size[0] // 2), rect_size[1] // 2 - (img.size[1] // 2))
+		offset = (self.rect_size[0] // 2 - (img.size[0] // 2), self.rect_size[1] // 2 - (img.size[1] // 2))
 		button_image.paste(img, offset, img)
 		
+		return button_image
 		
-		viewport.add_image(button_image, rect_pos)
-
-class TextInput():
-	def __init__(self, rect_pos, rect_size, viewport, text = "", image_path = None, text_color = (0, 0, 0) , bg_color = (255, 255, 255, 255), o_width = 2):
-		self.text_color = text_color
-		self.__text = " "
-		self.rect_size = rect_size
-		self.rect_pos = rect_pos
-		self.bg_color = bg_color
-		self.width = o_width
-		self.image_path = image_path
+	def get_hover(self):
+		return self.__hover
 		
-		if image_path != None:
-			self.text_input_image = Image.open(image_path, "RGBA")
+	def set_hover(self, value):
+		self.__hover = value
+		if value:
+			if not self.__clicked:
+				hover_color = []
+				for i in range(len(self.bg_color) - 1):
+					
+					if (self.bg_color[i] + 20 <= 255):
+						hover_color.append(self.bg_color[i] + 20)
+					else:
+						hover_color.append(self.bg_color[i])
+					
+				hover_color.append(self.bg_color[-1])
+				hover_color = tuple(hover_color)
+				img = self.get_image(hover_color, self.text_color)
+				viewport.add_image(img, self.rect_pos)
+			
 		else:
-			self.text_input_image = Image.new("RGBA", rect_size, bg_color)
-			draw = ImageDraw.Draw(self.text_input_image)
-			draw.rectangle(((o_width // 2 - 1, o_width // 2 - 1), (rect_size[0] - (o_width // 2), rect_size[1] - (o_width // 2))), fill= bg_color, outline = (0,0,0,255), width = o_width)
-			self.text_input_image = self.text_input_image.resize(rect_size)
+			img = self.get_image(self.bg_color, self.text_color)
+			viewport.add_image(img, self.rect_pos)
 		
-		viewport.add_image(self.text_input_image, rect_pos)
-		
-	def clear(self):
-		if self.image_path != None:
-			self.text_input_image = Image.open(self.image_path, "RGBA")
+	hover = property(get_hover, set_hover)
+	
+	def get_clicked(self):
+		return self.__clicked
+	
+	def set_clicked(self, value):
+		self.__clicked = value
+		if value:
+			if self.__hover:
+				hover_color = []
+				if self.handler:
+					self.handler()
+				for i in range(len(self.bg_color) - 1):
+					if (self.bg_color[i] - 20 >= 0):
+						hover_color.append(self.bg_color[i] - 20)
+					else:
+						hover_color.append(self.bg_color[i])
+				
+				
+				hover_color.append(self.bg_color[-1])
+				hover_color = tuple(hover_color)
+				img = self.get_image(hover_color, self.text_color, clicked = True)
+				viewport.add_image(img, self.rect_pos)
+				return
+			else:
+				self.__clicked = False
 		else:
-			self.text_input_image = Image.new("RGBA", self.rect_size, self.bg_color)
-			draw = ImageDraw.Draw(self.text_input_image)
-			draw.rectangle(((self.width // 2 - 1, self.width // 2 - 1), (self.rect_size[0] - (self.width // 2), self.rect_size[1] - (self.width // 2))), fill= self.bg_color, outline = (0,0,0,255), width = self.width)
-			self.text_input_image = self.text_input_image.resize(self.rect_size)
+			img = self.get_image(self.bg_color, self.text_color)
+			viewport.add_image(img, self.rect_pos)
+		
+	clicked = property(get_clicked, set_clicked)
+
+class Manager():
+	def __init__(self):
+		self.buttons = {}
 	
-	def set_text(self, value):
-		self.__text = value
+	def update(self, event):
+		if (event.type == MOUSEMOTION):
+			pos = event.pos
+			buttons = event.buttons
+			
+			for button_name in self.buttons:
+				
+				button = self.buttons[button_name]
+				#print("Mouse Position: ", pos, "Button Rect: ", rect)
+				if (pos[0] >=  button.rect_pos[0] and pos[0] <= button.rect_pos[0]  + button.rect_size[0] ) and (pos[1] >= button.rect_pos[1] and pos[1] <= button.rect_pos[1]  + button.rect_size[1] ):
+					button.hover = True
+					
+				else:
+					button.hover = False
+					button.clicked = False
+			
+		# if (event.type == MOUSEBUTTONUP):
+			# button = event.button
+			# if button == 1:
+				# for button_name in self.buttons:
+					# button = self.buttons[button_name]
+					# button.clicked = True
 		
-		self.clear()
+		if (event.type == MOUSEBUTTONDOWN):
+			button = event.button
+			if button == 1:
+				for button_name in self.buttons:
+					clicked_button = self.buttons[button_name]
+					clicked_button.clicked = True
+						
+		if (event.type == MOUSEBUTTONUP):
+			button = event.button
+			if button == 1:
+				for button_name in self.buttons:
+					clicked_button = self.buttons[button_name]
+					if clicked_button.clicked:
+						clicked_button.clicked = False
+
+# class TextInput():
+	# def __init__(self, rect_pos, rect_size, viewport, text = "", image_path = None, text_color = (0, 0, 0) , bg_color = (255, 255, 255, 255), o_width = 2):
+		# self.text_color = text_color
+		# self.__text = " "
+		# self.rect_size = rect_size
+		# self.rect_pos = rect_pos
+		# self.bg_color = bg_color
+		# self.width = o_width
+		# self.image_path = image_path
 		
-		img = font.render(self.__text, True, self.text_color)
-		string_image = pygame.image.tostring(img, "RGBA", False)
-		img = Image.frombytes("RGBA", img.get_size(), string_image)
+		# if image_path != None:
+			# self.text_input_image = Image.open(image_path, "RGBA")
+		# else:
+			# self.text_input_image = Image.new("RGBA", rect_size, bg_color)
+			# draw = ImageDraw.Draw(self.text_input_image)
+			# draw.rectangle(((o_width // 2 - 1, o_width // 2 - 1), (rect_size[0] - (o_width // 2), rect_size[1] - (o_width // 2))), fill= bg_color, outline = (0,0,0,255), width = o_width)
+			# self.text_input_image = self.text_input_image.resize(rect_size)
 		
-		h = self.rect_size[1] -2 * self.width
-		aspect = img.size[0] / (3 * h)
-		w = int(img.size[1] * aspect)
-		img = img.resize((w,h), Image.ANTIALIAS)
+		# viewport.add_image(self.text_input_image, rect_pos)
 		
-		offset = (self.width, self.rect_size[1] // 2 - (img.size[1] // 2))
-		if w >= self.text_input_image.size[0] - 20:
-			img = img.crop((img.size[0] - self.text_input_image.size[0] + (2 * self.width), 0, img.size[0], img.size[1]))
-		self.text_input_image.paste(img, offset, img)
+	# def clear(self):
+		# if self.image_path != None:
+			# self.text_input_image = Image.open(self.image_path, "RGBA")
+		# else:
+			# self.text_input_image = Image.new("RGBA", self.rect_size, self.bg_color)
+			# draw = ImageDraw.Draw(self.text_input_image)
+			# draw.rectangle(((self.width // 2 - 1, self.width // 2 - 1), (self.rect_size[0] - (self.width // 2), self.rect_size[1] - (self.width // 2))), fill= self.bg_color, outline = (0,0,0,255), width = self.width)
+			# self.text_input_image = self.text_input_image.resize(self.rect_size)
+	
+	# def set_text(self, value):
+		# self.__text = value
 		
-		viewport.add_image(self.text_input_image, self.rect_pos)
+		# self.clear()
+		
+		# img = font.render(self.__text, True, self.text_color)
+		# string_image = pygame.image.tostring(img, "RGBA", False)
+		# img = Image.frombytes("RGBA", img.get_size(), string_image)
+		
+		# h = self.rect_size[1] -2 * self.width
+		# aspect = img.size[0] / (3 * h)
+		# w = int(img.size[1] * aspect)
+		# img = img.resize((w,h), Image.ANTIALIAS)
+		
+		# offset = (self.width, self.rect_size[1] // 2 - (img.size[1] // 2))
+		# if w >= self.text_input_image.size[0] - 20:
+			# img = img.crop((img.size[0] - self.text_input_image.size[0] + (2 * self.width), 0, img.size[0], img.size[1]))
+		# self.text_input_image.paste(img, offset, img)
+		
+		# viewport.add_image(self.text_input_image, self.rect_pos)
 		
 		
-	def get_text(self):
-		return self.__text
+	# def get_text(self):
+		# return self.__text
 		
-	text = property(get_text, set_text)
+	# text = property(get_text, set_text)
 	
 
-
+						
+					
+def render():
+	print("Render")
 # Initialization of Window
 
 
@@ -357,9 +481,11 @@ context = moderngl.create_context()
 
 #texture = Texture((0,0), img)
 
-viewport = Viewport()
+manager = Manager()
 
-btn = Button((100,100), (100, 40), "Render", viewport, prefered_height = 60)
+viewport = Viewport(manager)
+
+btn = Button((100,100), (100, 40), "Render", viewport, prefered_height = 60 , handler = render)
 
 btn2 = Button((100,160), (100, 40), "Quit", viewport, prefered_height = 60)
 
@@ -415,8 +541,13 @@ while running:
 	
 	
 	for event in pygame.event.get():
+	
+		manager.update(event)
 		if event.type == pygame.QUIT:
 			running = False
+			
+		elif event.type == pygame.WINDOWEVENT_MOVED:
+			print("eben")
 			
 		elif event.type == pygame.USEREVENT:
 			if event.user_type == pygame_gui.UI_BUTTON_PRESSED:
