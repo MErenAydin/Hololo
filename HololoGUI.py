@@ -8,6 +8,13 @@ from pyrr import Matrix44,Quaternion,Vector3
 import pygame_gui
 from PIL import Image, ImageDraw, ImageChops
 
+import tkinter as tk
+from tkinter import filedialog as fd 
+from tkinter import messagebox as mbox
+
+root = tk.Tk()
+root.withdraw()
+
 width, height = 1280, 720
 
 class Transform:
@@ -258,7 +265,7 @@ class Viewport():
 		
 class Button():
 
-	def __init__(self, rect_pos, rect_size, button_name, button_text, viewport, handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , prefered_height = 80, three_D = True):
+	def __init__(self, rect_pos, rect_size, button_name, button_text, viewport, handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , three_D = True):
 		
 		self.__hover = False
 		self.__clicked = False
@@ -272,7 +279,6 @@ class Button():
 		self.text_color = text_color
 		self.bg_color = bg_color
 		self.width = o_width
-		self.prefered_height = prefered_height
 		self.three_D = three_D
 		self.handler = handler
 		
@@ -310,9 +316,9 @@ class Button():
 		img = font.render(self.button_text, True, text_color)
 		string_image = pygame.image.tostring(img, "RGBA", False)
 		img = Image.frombytes("RGBA", img.get_size(), string_image)
-		wpercent = (self.prefered_height/float(img.size[0]))
-		hsize = int((float(img.size[1])*float(wpercent)))
-		img = img.resize((self.prefered_height,hsize), Image.ANTIALIAS)
+		# wpercent = (self.prefered_height/float(img.size[0]))
+		# hsize = int((float(img.size[1])*float(wpercent)))
+		# img = img.resize((self.prefered_height,hsize), Image.ANTIALIAS)
 		
 		offset = (self.rect_size[0] // 2 - (img.size[0] // 2), self.rect_size[1] // 2 - (img.size[1] // 2))
 		button_image.paste(img, offset, img)
@@ -328,7 +334,6 @@ class Button():
 		if changed:
 			if value:
 				if not self.__clicked:
-					print("girdi")
 					hover_color = []
 					for i in range(len(self.bg_color) - 1):
 						
@@ -478,6 +483,19 @@ class Manager():
 					
 def render():
 	print("Render")
+	
+def app_quit():
+	global running 
+	running = False
+	
+def load():
+	names = fd.askopenfilenames()
+	for name in names:
+		try:
+			scene = pyassimp.load(name)
+			mesh_list.append(Mesh(scene, pos = (0.0,0.0,0.0)))
+		except:
+			mbox.showerror("Load Error" , "Could not load " + name)
 # Initialization of Window
 
 
@@ -485,8 +503,8 @@ pygame.init()
 
 #[print(a) for a in sorted(pygame.font.get_fonts())]
 
-font = pygame.font.SysFont("OpenSans-Light.ttf", 50)
-font = pygame.font.Font("Font\OpenSans-Regular.ttf", 50)
+#font = pygame.font.SysFont("OpenSans-Light.ttf", 50)
+font = pygame.font.Font("Font\OpenSans-Regular.ttf", 16)
 # img = font.render('The quick brown fox jumps over the lazy dog', True, (0,0,255))
 
 # string_image = pygame.image.tostring(img, "RGBA", False)
@@ -505,28 +523,17 @@ manager = Manager()
 
 viewport = Viewport(manager)
 
-btn = Button((100,100), (100, 40), "Render", "Render", viewport, prefered_height = 60 , handler = render)
+btn = Button((20,height - 40 -80), (100, 40), "Render", "Render", viewport, handler = render)
 
-btn2 = Button((100,160), (100, 40), "Quit", "Quit", viewport, prefered_height = 60)
+btn2 = Button((20,height - 40 - 20), (100, 40), "Quit", "Quit", viewport, handler = app_quit)
 
-btn3 = Button((100,220), (100, 40), "Bişiler", "Bişiler", viewport, prefered_height = 60)
-
+btn3 = Button((20,height - 40 - 140), (100, 40), "Load", "Load", viewport, handler = load)
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
 mesh_list = []
 
 scene = pyassimp.load("Template/display_area.stl")
 mesh_list.append(Mesh(scene, pos = (0.0,0.0,0.0)))
-
-scene = pyassimp.load("Template/test.stl")
-mesh_list.append(Mesh(scene, pos = (0.0,-2.0,0.0)))
-
-scene = pyassimp.load("Template/torus.stl")
-mesh_list.append(Mesh(scene, pos = (-2.0,0.0,0.0)))
-scene = pyassimp.load("Template/cube_h.stl")
-mesh_list.append(Mesh(scene, pos = (2.0,0.0,0.0)))
-scene = pyassimp.load("Template/cube.stl")
-mesh_list.append(Mesh(scene, pos = (0.0,2.0,0.0)))
 
 
 grid = Grid(5,11)
@@ -565,8 +572,6 @@ while running:
 		if event.type == pygame.QUIT:
 			running = False
 			
-		elif event.type == pygame.WINDOWEVENT_MOVED:
-			print("eben")
 			
 		elif event.type == pygame.USEREVENT:
 			if event.user_type == pygame_gui.UI_BUTTON_PRESSED:
@@ -615,7 +620,7 @@ while running:
 						pygame.mouse.set_pos([pos[0],height - 55])
 
 					# Clear the event buffer
-					#pygame.event.clear()
+					pygame.event.clear()
 
 		# If mouse scroll moved
 		elif event.type == MOUSEWHEEL:
