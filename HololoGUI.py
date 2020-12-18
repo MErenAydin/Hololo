@@ -6,8 +6,7 @@ import numpy as np
 import struct
 from pyrr import Matrix44,Quaternion,Vector3
 import pygame_gui
-from PIL import Image, ImageDraw
-
+from PIL import Image, ImageDraw, ImageChops
 
 width, height = 1280, 720
 
@@ -200,7 +199,7 @@ class Viewport():
 	
 	def __init__(self, manager, v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
 		
-		self.image = Image.new("RGBA", (width, height), (0,0,0,0))
+		self.__image = Image.new("RGBA", (width, height), (0,0,0,0))
 		self.manager = manager
 		
 		vertices = np.array([
@@ -230,22 +229,43 @@ class Viewport():
 		self.vao = context.simple_vertex_array(self.program, self.vbo, 'in_vert', 'in_text')
 		
 	def add_image(self, img, pos):
-		self.image.paste(img, pos)
-		self.texture.write(self.image.tobytes())
-		self.texture.use(0)
+		temp = self.image.copy()
+		temp.paste(img, pos)
+		self.image = temp
+		
+	def get_image(self):	
+		return self.__image
+		
+	def set_image(self, value):
+		diff = ImageChops.difference(self.__image.copy().convert("RGB"), value.copy().convert("RGB"))
+		
+		if diff.getbbox():
+			self.__image = value
+			self.texture.write(self.__image.tobytes())
+			self.texture.use(0)
+		
+	def get_concat_h(self, im1, im2):
+		dst = Image.new('RGBA', (im1.width + im2.width, im1.height))
+		dst.paste(im1, (0, 0))
+		dst.paste(im2, (im1.width, 0))
+		return dst
+		
+	
+	image = property(get_image, set_image)
 	
 	def render(self):
 		self.vao.render(moderngl.TRIANGLES)
 		
 class Button():
 
-	def __init__(self, rect_pos, rect_size, button_text, viewport, handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , prefered_height = 80, three_D = True):
+	def __init__(self, rect_pos, rect_size, button_name, button_text, viewport, handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , prefered_height = 80, three_D = True):
 		
 		self.__hover = False
 		self.__clicked = False
 		
 		self.rect_pos = rect_pos
 		self.rect_size = rect_size
+		self.button_name = button_name
 		self.button_text = button_text
 		self.viewport = viewport
 		self.image_path = image_path
@@ -256,7 +276,7 @@ class Button():
 		self.three_D = three_D
 		self.handler = handler
 		
-		viewport.manager.buttons[button_text] = self
+		viewport.manager.buttons[button_name] = self
 		
 		viewport.add_image(self.get_image(self.bg_color, self.text_color), self.rect_pos)
 		
@@ -303,25 +323,28 @@ class Button():
 		return self.__hover
 		
 	def set_hover(self, value):
+		changed = self.hover != value
 		self.__hover = value
-		if value:
-			if not self.__clicked:
-				hover_color = []
-				for i in range(len(self.bg_color) - 1):
-					
-					if (self.bg_color[i] + 20 <= 255):
-						hover_color.append(self.bg_color[i] + 20)
-					else:
-						hover_color.append(self.bg_color[i])
-					
-				hover_color.append(self.bg_color[-1])
-				hover_color = tuple(hover_color)
-				img = self.get_image(hover_color, self.text_color)
+		if changed:
+			if value:
+				if not self.__clicked:
+					print("girdi")
+					hover_color = []
+					for i in range(len(self.bg_color) - 1):
+						
+						if (self.bg_color[i] + 20 <= 255):
+							hover_color.append(self.bg_color[i] + 20)
+						else:
+							hover_color.append(self.bg_color[i])
+						
+					hover_color.append(self.bg_color[-1])
+					hover_color = tuple(hover_color)
+					img = self.get_image(hover_color, self.text_color)
+					viewport.add_image(img, self.rect_pos)
+				
+			else:
+				img = self.get_image(self.bg_color, self.text_color)
 				viewport.add_image(img, self.rect_pos)
-			
-		else:
-			img = self.get_image(self.bg_color, self.text_color)
-			viewport.add_image(img, self.rect_pos)
 		
 	hover = property(get_hover, set_hover)
 	
@@ -332,23 +355,25 @@ class Button():
 		self.__clicked = value
 		if value:
 			if self.__hover:
-				hover_color = []
+				click_color = []
 				if self.handler:
 					self.handler()
 				for i in range(len(self.bg_color) - 1):
 					if (self.bg_color[i] - 20 >= 0):
-						hover_color.append(self.bg_color[i] - 20)
+						click_color.append(self.bg_color[i] - 20)
 					else:
-						hover_color.append(self.bg_color[i])
+						click_color.append(self.bg_color[i])
 				
 				
-				hover_color.append(self.bg_color[-1])
-				hover_color = tuple(hover_color)
-				img = self.get_image(hover_color, self.text_color, clicked = True)
+				click_color.append(self.bg_color[-1])
+				click_color = tuple(click_color)
+				img = self.get_image(click_color, self.text_color, clicked = True)
 				viewport.add_image(img, self.rect_pos)
 				return
 			else:
 				self.__clicked = False
+				img = self.get_image(self.bg_color, self.text_color)
+				viewport.add_image(img, self.rect_pos)
 		else:
 			img = self.get_image(self.bg_color, self.text_color)
 			viewport.add_image(img, self.rect_pos)
@@ -358,30 +383,15 @@ class Button():
 class Manager():
 	def __init__(self):
 		self.buttons = {}
-	
+		
 	def update(self, event):
 		if (event.type == MOUSEMOTION):
 			pos = event.pos
+			rel = event.rel
 			buttons = event.buttons
 			
-			for button_name in self.buttons:
-				
-				button = self.buttons[button_name]
-				#print("Mouse Position: ", pos, "Button Rect: ", rect)
-				if (pos[0] >=  button.rect_pos[0] and pos[0] <= button.rect_pos[0]  + button.rect_size[0] ) and (pos[1] >= button.rect_pos[1] and pos[1] <= button.rect_pos[1]  + button.rect_size[1] ):
-					button.hover = True
-					
-				else:
-					button.hover = False
-					button.clicked = False
+			self.is_collides_buttons(pos)
 			
-		# if (event.type == MOUSEBUTTONUP):
-			# button = event.button
-			# if button == 1:
-				# for button_name in self.buttons:
-					# button = self.buttons[button_name]
-					# button.clicked = True
-		
 		if (event.type == MOUSEBUTTONDOWN):
 			button = event.button
 			if button == 1:
@@ -397,7 +407,17 @@ class Manager():
 					if clicked_button.clicked:
 						clicked_button.clicked = False
 
-# class TextInput():
+	def is_collides_buttons(self, point):
+		for button_name in self.buttons:
+					
+			button = self.buttons[button_name]
+			if (point[0] >=  button.rect_pos[0] and point[0] <= button.rect_pos[0]  + button.rect_size[0] ) and (point[1] >= button.rect_pos[1] and point[1] <= button.rect_pos[1]  + button.rect_size[1]):
+				button.hover = True
+				
+			else:
+				button.hover = False
+
+"""# class TextInput():
 	# def __init__(self, rect_pos, rect_size, viewport, text = "", image_path = None, text_color = (0, 0, 0) , bg_color = (255, 255, 255, 255), o_width = 2):
 		# self.text_color = text_color
 		# self.__text = " "
@@ -452,7 +472,7 @@ class Manager():
 		# return self.__text
 		
 	# text = property(get_text, set_text)
-	
+"""
 
 						
 					
@@ -465,8 +485,8 @@ pygame.init()
 
 #[print(a) for a in sorted(pygame.font.get_fonts())]
 
-font = pygame.font.SysFont("D:\Code\Python\Hololo\OpenSans-Light.ttf", 50)
-font = pygame.font.Font("D:\Code\Python\Hololo\Font\OpenSans-Regular.ttf", 50)
+font = pygame.font.SysFont("OpenSans-Light.ttf", 50)
+font = pygame.font.Font("Font\OpenSans-Regular.ttf", 50)
 # img = font.render('The quick brown fox jumps over the lazy dog', True, (0,0,255))
 
 # string_image = pygame.image.tostring(img, "RGBA", False)
@@ -485,11 +505,11 @@ manager = Manager()
 
 viewport = Viewport(manager)
 
-btn = Button((100,100), (100, 40), "Render", viewport, prefered_height = 60 , handler = render)
+btn = Button((100,100), (100, 40), "Render", "Render", viewport, prefered_height = 60 , handler = render)
 
-btn2 = Button((100,160), (100, 40), "Quit", viewport, prefered_height = 60)
+btn2 = Button((100,160), (100, 40), "Quit", "Quit", viewport, prefered_height = 60)
 
-btn3 = Button((100,220), (100, 40), "Bişiler", viewport, prefered_height = 60)
+btn3 = Button((100,220), (100, 40), "Bişiler", "Bişiler", viewport, prefered_height = 60)
 
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
@@ -585,14 +605,14 @@ while running:
 						
 
 					# Do not let the mouse pointer go out of boundaries while transforming 
-					if pos[0] >= width - 30:
-						pygame.mouse.set_pos([35,pos[1]])
-					elif pos[0] <= 30:
-						pygame.mouse.set_pos([width - 35,pos[1]])
-					if pos[1] >= height - 30:
-						pygame.mouse.set_pos([pos[0],35])
-					elif pos[1] <= 30:
-						pygame.mouse.set_pos([pos[0],height - 35])
+					if pos[0] >= width - 50:
+						pygame.mouse.set_pos([55,pos[1]])
+					elif pos[0] <= 50:
+						pygame.mouse.set_pos([width - 55,pos[1]])
+					if pos[1] >= height - 50:
+						pygame.mouse.set_pos([pos[0],55])
+					elif pos[1] <= 50:
+						pygame.mouse.set_pos([pos[0],height - 55])
 
 					# Clear the event buffer
 					#pygame.event.clear()
