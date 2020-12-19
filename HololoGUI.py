@@ -4,7 +4,7 @@ import pyassimp
 import moderngl
 import numpy as np
 import struct
-from pyrr import Matrix44,Quaternion,Vector3
+from pyrr import Matrix44,Quaternion,Vector3, Vector4, aabb
 import pygame_gui
 from PIL import Image, ImageDraw, ImageChops
 
@@ -17,161 +17,170 @@ root.withdraw()
 
 width, height = 1280, 720
 
+def grid(size, steps):
+	u = np.repeat(np.linspace(-size, size, steps), 2)
+	v = np.tile([-size, size], steps)
+	w = np.zeros(steps * 2)
+	return np.concatenate([np.dstack([u, v, w])[:][:][0], np.dstack([v, u, w])[:][:][0]])
+
 class Transform:
-	def __init__(self, pos, rot, scale):
-		self.pos = list(pos)
-		self.rot = list(rot)
-		self.scale_val = scale
-
-	def move(self, pos):
-		self.pos = [a+b for a,b in zip(pos,self.pos)]
-
-	def rotate(self, rot):
-		self.rot = [a+b for a,b in zip(rot,self.rot)]
 	
-	def scale(self, scale):
-		self.scale = scale
+	
+	def __init__(self, pos = Vector3([0,0,0]), rot = Quaternion.from_matrix(Matrix44.identity()), scale = Vector3([1,1,1])):
+		
+		self.__model_mat = Matrix44.identity()
+		
+		self.__pos = list(pos)
+		self.__rot = list(rot)
+		self.__scale = scale
+		self.__changed = True
+		
+	def get_transformation_matrix(self):
+		if self.__changed:
+			matrix = Matrix44.from_quaternion(self.rot)
+			matrix *= Matrix44.from_scale(self.scale)
+			self.__model_mat = matrix * Matrix44.from_translation(self.pos)
+			self.__changed = False
+		return self.__model_mat
+		
+		
+		
+	def get_pos(self):
+		return self.__pos
+		
+	def set_pos(self, value):
+		self.__pos = value
+		self.__changed = True
+		
+	def get_rot(self):
+		return self.__rot
+		
+	def set_rot(self, value):
+		self.__rot = value
+		self.__changed = True
+		
+	def get_scale(self):
+		return self.__scale
+		
+	def set_scale(self, value):
+		self.__scale = value
+		self.__changed = True
+		
+	pos = property(get_pos, set_pos)
+	rot = property(get_rot, set_rot)
+	scale = property(get_scale, set_scale)
+	
+	def get_euler(self):
+		return self.__rot.axis
 
-class Mesh(Transform):
-	def __init__(self, scene, pos = (0.0,0.0,0.0), rot = (0.0,0.0,0.0), scale = 1.0, mesh_index = 0):
-		super().__init__(pos, rot, scale)
-		self.scene = scene
-		self.normals = scene.meshes[mesh_index].normals
-		self.vertices = scene.meshes[mesh_index].vertices
-		self.model_mat = Matrix44.from_translation(np.array(pos))
+class Mesh:
+	def __init__(self, vertices, indices = None, normals = None):
 		
 
-		vertices = np.append(self.vertices, self.normals,1)
-		self.min_z = vertices[:,2].min()
-		flatten = [j for i in vertices for j in i]
-
-		self.context = Context(scale, flatten , pos, light_pos = (60, -45, 50))
-
-	def move(self, x, y, z):
-		super().move((x,y,z))
-		self.model_mat = Matrix44.from_translation(np.array([x,y,z]))
-	
-	def lean_floor(self):
-		self.model_mat = Matrix44.from_translation(np.array([self.pos[0], self.pos[1], -self.min_z]))
-	
-	def move_relative(self, x, y, z):
+		self.normals = normals if normals is not None else np.zeros((len(vertices),3))
+		self.indices = indices if indices is not None else np.array(list(range(len(vertices))))
 		
-		super().move((float(x),float(y),float(z)))
-		self.model_mat *= Matrix44.from_translation(np.array([float(x),float(y),float(z)]))
-	
-	def rotate(self, x, y, z):
-		super().rotate((x,y,z))
-		self.model_mat = Matrix44.from_eulers(np.array([x,y,z]))
+		vertices = np.append(vertices, self.normals,1)
 		
-	def rotate_relative(self, x, y, z):
-		super().rotate((x,y,z))
-		self.model_mat *= Matrix44.from_eulers(np.array([x,y,z]))
+		self.vertices = [j for i in vertices for j in i]
+		
+		# super().__init__(pos, rot, scale)
+		# self.scene = scene
+		# self.normals = scene.meshes[mesh_index].normals
+		
+		# self.vertices = scene.meshes[mesh_index].vertices
+		# self.model_mat = Matrix44.from_translation(np.array(pos))
+		
+		# print(self.vertices)
 
-	def scale(self, scale):
-		super().scale(scale)
-		context._scale.value = scale
+		# vertices = np.append(self.vertices, self.normals,1)
+		# self.min_z = vertices[:,2].min()
+		# flatten = [j for i in vertices for j in i]
 
-	def render(self, color = (.7, .5, .3 , 1.0)):
-		proj = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
-		self.context._projection.write(proj.astype('float32').tobytes())
-		self.context._view.write(camera.look_at.astype('float32').tobytes())
-		self.context._rotation.write(rotate.astype('float32').tobytes())
-		self.context._model.write(self.model_mat.astype('float32').tobytes())
-		self.context._color.value = color
-		self.context.vao.render(moderngl.TRIANGLES)
+		# self.context = Shader(scale, flatten , pos)
 
-class Context:
-	def __init__(self):
-		pass
-	def __init__(self, scale, flatten, pos, light_pos = (0,0,0), light_color = (1.0,1.0,1.0), v_shader_path = "D:/Code/Python/Hololo/Shaders/model_v.shader" , f_shader_path = "D:/Code/Python/Hololo/Shaders/model_f.shader"):
+	
+	
+	@staticmethod
+	def from_assimp_mesh(mesh):
+		normals = mesh.normals
+		vertices = mesh.vertices
+		
+		# vertices = np.append(vertices, normals,1)
+		
+		# flatten = [j for i in vertices for j in i]
+		return Mesh(vertices, normals = normals)
+	
+	@staticmethod
+	def from_file(path, mesh_index = 0):
+		scene = pyassimp.load(path)
+		return Mesh.from_assimp_mesh(scene.meshes[mesh_index])
+		
+	def calculate_bounding_box(self):
+		return aabb.from_points(self.vertices)
+
+class Model:
+	def __init__(self, mesh, transform = Transform(), color = (.7, .5, .3 , 1.0), v_shader_path = "Shaders/model_v.shader" , f_shader_path = "Shaders/model_f.shader"):
+		
+		
+		self.transform = transform
+		self.mesh = mesh
+		
 		self.program = context.program(
 			vertex_shader = open(v_shader_path).read(),
 			fragment_shader = open(f_shader_path).read(),
 			)
 			
-		context.enable(moderngl.DEPTH_TEST)
-		context.enable(moderngl.BLEND)
-		context.enable(moderngl.CULL_FACE)
-		context.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-
-		# Uniform 4x4 Matrices variables
+		self.color = color
+		
 		self._model = self.program['model']
 		self._view = self.program['view']
 		self._projection = self.program['projection']
-		self._rotation = self.program['rotation']
-
-		# Uniform Vector 3 variables
+		self._color = self.program['objectColor']
 		self._light_pos = self.program['lightPos']
 		self._light_color = self.program['lightColor']
-		self._color = self.program['objectColor']
-
-		# Uniform Float Variable
-		self._scale = self.program['scale']
-
-
-
-		self._light_pos.value = light_pos
-		self._light_color.value = light_color
-
-		model_mat = Matrix44.from_translation(np.array([pos[0],pos[1],pos[2]]))
-		self._model.write(model_mat.astype('float32').tobytes())
-
-		self._scale.write(struct.pack("f",scale))
-
-		self.vbo = context.buffer(struct.pack("{0:d}f".format(len(flatten)),*flatten))
+		
+		self.vbo = context.buffer(struct.pack("{0:d}f".format(len(self.mesh.vertices)), *self.mesh.vertices))
+		# self.vbo = context.buffer(self.mesh.vertices.astype("f4"))
+		#self.ebo = context.buffer(self.mesh.indices.astype("uint32").tobytes())
 		self.vao = context.simple_vertex_array(self.program, self.vbo, 'aPos','aNormal')
-
-		context.enable(moderngl.DEPTH_TEST)
-		context.enable(moderngl.BLEND)
-		context.enable(moderngl.CULL_FACE)
-		context.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-
-class Grid(Transform):
-	def __init__(self, size, steps, pos = (0.0,0.0,0.0), scale = 1.0, offset = 0, v_shader_path = "Shaders/grid_v.shader", f_shader_path = "Shaders/grid_f.shader"):
-		super().__init__(pos, (0.0,0.0,0.0), scale)
-		u = np.repeat(np.linspace(-size, size, steps), 2)
-		v = np.tile([-size, size], steps)
-		w = np.zeros(steps * 2)
-		w.fill(offset)
-		vertices = np.concatenate([np.dstack([u, v, w]), np.dstack([v, u, w])])
-
-		self.program = context.program(
-			vertex_shader = open(v_shader_path).read(),
-			fragment_shader = open(f_shader_path).read(),
-			)
 		
-		
-		self._mvp = self.program["Mvp"]
-		self._rot = self.program["Rot"]
-		self._scale = self.program["Scale"]
-		
-		self.vbo = context.buffer(vertices.astype('f4'))
-		self.vao = context.simple_vertex_array(self.program, self.vbo, 'in_vert')
-		
-		self._scale.value = 1.0
-		self._rot.write(Matrix44.identity().astype('float32').tobytes())
+	def render(self, camera,  light, render_type = moderngl.TRIANGLES):
+	
+		self._projection.write(camera.projection.astype('float32').tobytes())
+		self._view.write(camera.get_view_matrix().astype('float32').tobytes())
+		self._model.write(self.transform.get_transformation_matrix().astype('float32').tobytes())
+		self._color.value = self.color
+		self._light_color.value = light.color
+		self._light_pos.value = tuple(light.pos)
 
-	def render(self, view):
-		projection = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
-		self._mvp.write((projection * view).astype('float32').tobytes())
-		
-		self.vao.render(moderngl.LINES)
+		self.vao.render(render_type)
+	
+	def reload(self):
+		self.vbo.write(struct.pack("{0:d}f".format(len(self.mesh.vertices)), *self.mesh.vertices))
 
-class Camera(Transform):
-	def __init__(self, pos, look_point, up = (0.0, 0.0, 1.0)):
-		super().__init__(pos, (0,0,0), 1.0)
-		self._init_pos = list(pos)
-		self.pos = list(pos)
+class Camera:
+	def __init__(self, pos, look_point, up = Vector3([0.0, 0.0, 1.0])):
+	
+		self._init_pos = pos
+		self.pos = pos
 		self.rot = [np.arctan2(np.sqrt(self.pos[2] ** 2 + self.pos[0] ** 2), self.pos[1]),
 					np.arctan2(np.sqrt(self.pos[0] ** 2 + self.pos[1] ** 2), self.pos[2]),
 					np.arctan2(np.sqrt(self.pos[1] ** 2 + self.pos[2] ** 2), self.pos[0])]
-		self.up = list(up)
+		self.up = up
 		self.radius = np.sqrt((pos[0] - look_point[0]) ** 2 + (pos[1] - look_point[1]) ** 2 + (pos[2] - look_point[2]) ** 2)
 		self.look_point = look_point
-		self.look_at = Matrix44.look_at(pos, look_point, up)
+		
+		self.view = Matrix44.look_at(pos, look_point, up)
+		self.projection = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
+		
+		self.__changed = True
 	
-	def update(self):
-		self.look_at = Matrix44.look_at(self.pos, self.look_point, self.up)
+	def get_view_matrix(self):
+		if self.__changed:
+			self.view = Matrix44.look_at(self.pos, self.look_point, self.up)
+			self.__changed = False
+		return self.view
 		
 	def rotate(self, rotation_vector):
 		self.rot = [a+b for a, b in zip(self.rot, [x / 250.0 for x in rotation_vector])]
@@ -180,8 +189,8 @@ class Camera(Transform):
 		self.pos = [np.sin(self.rot[1]) * np.cos(self.rot[2]), np.sin(self.rot[1]) * np.sin(self.rot[2]) , np.cos(self.rot[1])]
 		self.pos = [a* self.radius for a in self.pos]
 		
-		self.update()
-	
+		self.__changed = True
+ 	
 	def distance(self, raw_scroll):
 		delta = 0.9
 		if raw_scroll > 0:
@@ -192,7 +201,7 @@ class Camera(Transform):
 		self.radius = np.clip(self.radius, 3, 50)
 		self.pos = [np.sin(self.rot[1]) * np.cos(self.rot[2]), np.sin(self.rot[1]) * np.sin(self.rot[2]) , np.cos(self.rot[1])]
 		self.pos = [a* self.radius for a in self.pos]
-		self.update()
+		self.__changed = True
 	
 	def reset(self):
 		self.pos = self._init_pos
@@ -200,9 +209,78 @@ class Camera(Transform):
 					np.arctan2(np.sqrt(self.pos[0] ** 2 + self.pos[1] ** 2), self.pos[2]),
 					np.arctan2(np.sqrt(self.pos[1] ** 2 + self.pos[2] ** 2), self.pos[0])]
 		self.radius =  np.sqrt((self.pos[0] - self.look_point[0]) ** 2 + (self.pos[1] - self.look_point[1]) ** 2 + (self.pos[2] - self.look_point[2]) ** 2)
-		self.update()
+		self.__changed = True
+
+class Light:
+	def __init__(self, pos, color = (1.0, 1.0, 1.0)):
+		self.pos = pos
+		self.color = color
+
+class Gizmo(Transform):
+	def __init__(self, pos = (0.0, 0.0, 0.0), rot = (0.0, 0.0, 0.0), scale = 1, mesh = None, type = "", v_shader_path = "Shaders/model_v.shader", f_shader_path = "Shaders/model_f.shader"):
+		super().__init__(pos, rot, scale)
+		
+		if type == "rot":
+			scene = pyassimp.load("Template/rotate_gizmo.stl")
+		elif type == "scale":
+			scene = pyassimp.load("Template/scale_gizmo.stl")
+		else:
+			scene = pyassimp.load("Template/move_gizmo.stl")
+		
+		self.normals = scene.meshes[0].normals
+		self.vertices = scene.meshes[0].vertices
+		self.model_mat = Matrix44.from_translation(np.array(pos))
+		
+		vertices = np.append(self.vertices, self.normals,1)
+		
+		flatten = [j for i in vertices for j in i]
+		if mesh:
+			self.context = Shader(scale, flatten, mesh.pos)
+		else:
+			self.context = Shader(scale, flatten, self.pos)
+	def render(self):
+		color = (0, 0 , 255 , 255) 
+		proj = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
+		
+		context.screen.color_mask = False, False, False, False
+		context.clear(depth=1.0, viewport = (width, height))
+		context.screen.color_mask = True, True, True, True
+		
+		self.context._scale.value = 1.0
+		self.context._projection.write(proj.astype('float32').tobytes())
+		self.context._view.write(camera.look_at.astype('float32').tobytes())
+		
+		self.context._rotation.write(rotate.astype('float32').tobytes())
+		self.model_mat = Matrix44.identity()
+		self.context._model.write(self.model_mat.astype('float32').tobytes())
+		self.context._color.value = color
+		self.context.vao.render(moderngl.TRIANGLES)
+		
+		self.rotate(np.pi /2,0,0)
+		self.context._color.value = (0,255,0,255)
+		self.context.vao.render(moderngl.TRIANGLES)
+		
+		self.rotate(0,-np.pi /2,0)
+		self.context._color.value = (255,0,0,255)
+		self.context.vao.render(moderngl.TRIANGLES)	
 	
-class Viewport():
+	def rotate(self, x, y, z):
+		super().rotate((x,y,z))
+		matrix = Matrix44.from_x_rotation(x)
+		matrix *= Matrix44.from_y_rotation(y)
+		matrix *= Matrix44.from_z_rotation(z)
+		self.model_mat = matrix
+		self.context._model.write(self.model_mat.astype('float32').tobytes())
+	
+	def rotate_relative(self, x, y, z):
+		super().rotate((x,y,z))
+		matrix = Matrix44.from_x_rotation(x)
+		matrix *= Matrix44.from_y_rotation(y)
+		matrix *= Matrix44.from_z_rotation(z)
+		self.model_mat *= matrix
+		self.context._model.write(self.model_mat.astype('float32').tobytes())
+
+class Viewport:
 	
 	def __init__(self, manager, v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
 		
@@ -263,7 +341,7 @@ class Viewport():
 	def render(self):
 		self.vao.render(moderngl.TRIANGLES)
 		
-class Button():
+class Button:
 
 	def __init__(self, rect_pos, rect_size, button_name, button_text, viewport, handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , three_D = True):
 		
@@ -385,7 +463,7 @@ class Button():
 		
 	clicked = property(get_clicked, set_clicked)
 
-class Manager():
+class Manager:
 	def __init__(self):
 		self.buttons = {}
 		
@@ -490,16 +568,20 @@ def app_quit():
 	
 def load():
 	names = fd.askopenfilenames()
-	for name in names:
+	for i, name in enumerate(names):
 		try:
-			scene = pyassimp.load(name)
-			mesh_list.append(Mesh(scene, pos = (0.0,0.0,0.0)))
+			mesh_list.append(Model(Mesh.from_file(name), color = (.7, .5, i * .1 , 1.0)))
+		except Exception as e:
+			print(e)
 		except:
 			mbox.showerror("Load Error" , "Could not load " + name)
 # Initialization of Window
 
 
 pygame.init()
+
+pygame.display.gl_set_attribute(pygame.GL_CONTEXT_MAJOR_VERSION, 3)
+pygame.display.gl_set_attribute(pygame.GL_CONTEXT_MINOR_VERSION, 3)
 
 #[print(a) for a in sorted(pygame.font.get_fonts())]
 
@@ -515,8 +597,14 @@ font = pygame.font.Font("Font\OpenSans-Regular.ttf", 16)
 window = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
 pygame.display.set_caption("Hololo")
 
-context = moderngl.create_context()
 
+context = moderngl.create_context(require=330)
+context.enable(moderngl.DEPTH_TEST)
+context.enable(moderngl.BLEND)
+context.enable(moderngl.CULL_FACE)
+context.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+# fbo = context.simple_framebuffer((width,height))
+# fbo.use()
 #texture = Texture((0,0), img)
 
 manager = Manager()
@@ -532,37 +620,30 @@ btn3 = Button((20,height - 40 - 140), (100, 40), "Load", "Load", viewport, handl
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
 mesh_list = []
 
-scene = pyassimp.load("Template/display_area.stl")
-mesh_list.append(Mesh(scene, pos = (0.0,0.0,0.0)))
+#scene = pyassimp.load("Template/display_area.stl")
+#mesh_list.append(Mesh(scene, pos = (0.0,0.0,0.0)))
+
+#gizmo = Gizmo()
+
+grid = Model(Mesh(grid(5.0,11)), color = (0,0,0,1))
+
+mesh_list.append(Model(Mesh.from_file("Template/display_area.stl"), color = (0, 1, 0, 0.25)))
 
 
-grid = Grid(5,11)
 
 init_camera_pos = (10.0, 0.0, 2.5)
 origin = (0.0,0.0,0.0)
 camera = Camera(init_camera_pos, origin)
 
+light = Light(Vector3([50, 50, 50]))
 # Main Loop
-
-init_look = Matrix44.look_at(
-		(10, 0.0, 2.5),
-		(0.0, 0.0, 0.0),
-		(0.0, 0.0, 1.0),
-)
-look_at = init_look.copy()
-
-
-rotate = Matrix44.identity()
-rot_y = -0.25
-rot_z = 0
-s = 1.0
 
 clock = pygame.time.Clock()
 
 running = True
 
 while running:
-
+	
 	time_delta = clock.tick(60)/1000.0
 	
 	
@@ -572,12 +653,30 @@ while running:
 		if event.type == pygame.QUIT:
 			running = False
 			
-			
-		elif event.type == pygame.USEREVENT:
-			if event.user_type == pygame_gui.UI_BUTTON_PRESSED:
-				if event.ui_element == hello_button:
-					print('Hello World!')
+		elif (event.type == MOUSEBUTTONDOWN):
 
+			pos = event.pos
+			button = event.button
+			
+			
+			if button == 1:
+				x = ((pos[0]) / (width)) *2 -1;
+				y = ((pos[1]) / (height)) * 2 -1;
+				z = 0;
+				w = 1;
+				
+				
+				pv = camera.projection * camera.get_view_matrix()
+				
+				t = pv.inverse * Vector4((x,y,z,w))
+				transform = np.array((t.x / t.w, t.y / t.w, t.z / t.w))
+				cam_pos = np.array(camera.pos)
+				
+				ray = (transform - cam_pos)
+				
+				
+			
+		
 		elif event.type == KEYDOWN:
 			key = event.key
 			if key == K_r:
@@ -630,15 +729,16 @@ while running:
 	
 	context.viewport = (0, 0, width, height)
 	context.clear(0.7, 0.7, 0.9)
-	grid.render(camera.look_at)
+	grid.render(camera, light, render_type = moderngl.LINES)
 	
+	for mesh in mesh_list[1:]:
+		mesh.render(camera, light, render_type = moderngl.TRIANGLES)
+		#mesh.lean_floor()
 	
-	for i,mesh in enumerate(mesh_list):
-		if i != 0:
-			mesh.render(color = (.7, .5, i * 0.2 , 1.0))
-		mesh.lean_floor()
+	mesh_list[0].render(camera, light, render_type = moderngl.TRIANGLES)
 	
-	mesh_list[0].render(color = (0.0, 0.8 , 0.0 , 0.25))
+	#gizmo.render()
+	
 	
 	viewport.render()
 	pygame.display.flip()
