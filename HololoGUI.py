@@ -631,11 +631,11 @@ mesh_list.append(Model(Mesh.from_file("Template/display_area.stl"), color = (0, 
 
 
 
-init_camera_pos = (10.0, 0.0, 2.5)
+init_camera_pos = Vector3([10.0, 0.0, 2.5])
 origin = (0.0,0.0,0.0)
 camera = Camera(init_camera_pos, origin)
 
-light = Light(Vector3([50, 50, 50]))
+light = Light(init_camera_pos)
 # Main Loop
 
 clock = pygame.time.Clock()
@@ -717,7 +717,9 @@ while running:
 						pygame.mouse.set_pos([pos[0],55])
 					elif pos[1] <= 50:
 						pygame.mouse.set_pos([pos[0],height - 55])
-
+					
+					light.pos = camera.pos
+					
 					# Clear the event buffer
 					pygame.event.clear()
 
