@@ -4,8 +4,9 @@ out vec4 FragColor;
 in vec3 LightingColor; 
 
 uniform vec4 objectColor;
+uniform bool selection;
 
 void main()
 {
-   FragColor = vec4(LightingColor , 1.0) * objectColor;
+      FragColor =  selection ? vec4(objectColor.xyz, 1.0) : vec4(LightingColor , 1.0) * objectColor;      
 }

@@ -124,6 +124,9 @@ class Model:
 		self.transform = transform if transform is not None else Transform()
 		self.mesh = mesh
 		
+		self.v_shader_path = v_shader_path
+		self.f_shader_path = f_shader_path
+		
 		self.program = context.program(
 			vertex_shader = open(v_shader_path).read(),
 			fragment_shader = open(f_shader_path).read(),
@@ -137,37 +140,42 @@ class Model:
 		self._color = self.program['objectColor']
 		self._light_pos = self.program['lightPos']
 		self._light_color = self.program['lightColor']
+		self._selection = self.program['selection']
 		
 		self.vbo = context.buffer(struct.pack("{0:d}f".format(len(self.mesh.vertices)), *self.mesh.vertices))
 		# self.vbo = context.buffer(self.mesh.vertices.astype("f4"))
 		#self.ebo = context.buffer(self.mesh.indices.astype("uint32").tobytes())
 		self.vao = context.simple_vertex_array(self.program, self.vbo, 'aPos','aNormal')
 		
-	def render(self, camera,  light, render_type = moderngl.TRIANGLES):
-	
+	def render(self, camera,  light, render_type = moderngl.TRIANGLES, selection = False):
+		
 		self._projection.write(camera.projection.astype('float32').tobytes())
 		self._view.write(camera.get_view_matrix().astype('float32').tobytes())
 		self._model.write(self.transform.get_transformation_matrix().astype('float32').tobytes())
 		self._color.value = self.color
 		self._light_color.value = light.color
 		self._light_pos.value = tuple(light.pos)
-
+		self._selection.value = selection
 		self.vao.render(render_type)
 	
 	def reload(self):
 		self.vbo.write(struct.pack("{0:d}f".format(len(self.mesh.vertices)), *self.mesh.vertices))
-		
+
+
 class Camera:
 	def __init__(self, pos, look_point, up = None):
 		
 		self.up = up if up is not None else Vector3([0.0, 0.0, 1.0])
-		print(self.up)		
 		self._init_pos = pos
 		self.pos = pos
-		self.rot = [np.arctan2(np.sqrt(self.pos[2] ** 2 + self.pos[0] ** 2), self.pos[1]),
+		[10, 0, 2.5]
+		# self.rot = [np.arctan2(np.sqrt(self.pos[2] ** 2 + self.pos[0] ** 2), self.pos[1]),
+					# np.arctan2(np.sqrt(self.pos[0] ** 2 + self.pos[1] ** 2), self.pos[2]),
+					# np.arctan2(np.sqrt(self.pos[1] ** 2 + self.pos[2] ** 2), self.pos[0])]
+		self.rot = [0,
 					np.arctan2(np.sqrt(self.pos[0] ** 2 + self.pos[1] ** 2), self.pos[2]),
-					np.arctan2(np.sqrt(self.pos[1] ** 2 + self.pos[2] ** 2), self.pos[0])]
-		
+					0]
+					
 		self.radius = np.sqrt((pos[0] - look_point[0]) ** 2 + (pos[1] - look_point[1]) ** 2 + (pos[2] - look_point[2]) ** 2)
 		self.look_point = look_point
 		
@@ -207,9 +215,9 @@ class Camera:
 	
 	def reset(self):
 		self.pos = self._init_pos
-		self.rot = [np.arctan2(np.sqrt(self.pos[2] ** 2 + self.pos[0] ** 2), self.pos[1]),
+		self.rot = [0,
 					np.arctan2(np.sqrt(self.pos[0] ** 2 + self.pos[1] ** 2), self.pos[2]),
-					np.arctan2(np.sqrt(self.pos[1] ** 2 + self.pos[2] ** 2), self.pos[0])]
+					0]
 		self.radius =  np.sqrt((self.pos[0] - self.look_point[0]) ** 2 + (self.pos[1] - self.look_point[1]) ** 2 + (self.pos[2] - self.look_point[2]) ** 2)
 		self.__changed = True
 
@@ -220,8 +228,7 @@ class Light:
 
 class Gizmo:
 	def __init__(self, mesh = None, type = ""):
-		
-		
+	
 		
 		if type == "rot":
 			path = "Template/rotate_gizmo.stl"
@@ -230,38 +237,37 @@ class Gizmo:
 		else:
 			path = "Template/move_gizmo.stl"
 			
-		self.x_axis = Model(Mesh.from_file(path), color = (255, 0, 0 , 255))
-		self.y_axis = Model(Mesh.from_file(path), color = (0, 255, 0 , 255))
-		self.z_axis = Model(Mesh.from_file(path), color = (0, 0, 255 , 255))
-			
-		self.x_axis.transform.rot = Quaternion.from_y_rotation(-np.pi/2)
-		self.y_axis.transform.rot = Quaternion.from_x_rotation(np.pi/2)
+		self.axis = Model(Mesh.from_file(path), color = (255, 0, 0 , 255))
 		
 		
 		
-		self.rendering = True
+		self.visible = True
 		
 		if mesh is not None:
-			self.x_axis.pos += mesh.transform.pos
-			self.y_axis.pos += mesh.transform.pos
-			self.z_axis.pos += mesh.transform.pos
+			self.axis.pos += mesh.transform.pos
 			
 		
 	def render(self, camera,  light, render_type = moderngl.TRIANGLES):
 		
-		if self.rendering:
+		if self.visible:
 			context.screen.color_mask = False, False, False, False
 			context.clear(depth= 1.0, viewport = (width, height))
 			context.screen.color_mask = True, True, True, True
 			
-			self.x_axis.render(camera, light)
-			self.y_axis.render(camera, light)
-			self.z_axis.render(camera, light)
+			self.axis.transform.rot = Quaternion([0.0,0.0,0.0,1.0])
+			self.axis.color = (0, 0, 255, 255)
+			self.axis.render(camera, light)
+			
+			self.axis.transform.rot = Quaternion.from_y_rotation(-np.pi/2)
+			self.axis.color = (255, 0, 0, 255)
+			self.axis.render(camera, light)
+			
+			self.axis.transform.rot = Quaternion.from_x_rotation(np.pi/2)
+			self.axis.color = (0, 255, 0, 255)
+			self.axis.render(camera, light)
 	
 	def scale(self, scale_fac):
-		self.x_axis.transform.scale = np.clip(self.x_axis.transform.scale * scale_fac, 1 * (0.9 ** 12), 1 * ((1 / 0.9) ** 15))
-		self.y_axis.transform.scale = np.clip(self.y_axis.transform.scale * scale_fac, 1 * (0.9 ** 12), 1 * ((1 / 0.9) ** 15))
-		self.z_axis.transform.scale = np.clip(self.z_axis.transform.scale * scale_fac, 1 * (0.9 ** 12), 1 * ((1 / 0.9) ** 15))
+		self.axis.transform.scale = np.clip(self.axis.transform.scale * scale_fac, (0.9 ** 12), ((1 / 0.9) ** 15))
 
 class Viewport:
 	
@@ -323,7 +329,7 @@ class Viewport:
 	
 	def render(self):
 		self.vao.render(moderngl.TRIANGLES)
-		
+
 class Button:
 
 	def __init__(self, rect_pos, rect_size, button_name, button_text, viewport, handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , three_D = True):
@@ -540,13 +546,11 @@ class Manager:
 	# text = property(get_text, set_text)
 """
 
-						
-					
 def render():
 	print("Render")
 	
 def app_quit():
-	global running 
+	global running
 	running = False
 	
 def load():
@@ -558,8 +562,24 @@ def load():
 			print(e)
 		except:
 			mbox.showerror("Load Error" , "Could not load " + name)
-# Initialization of Window
 
+def get_selected_mesh_index(model_list, camera, mouse_pos):
+	if len(model_list) == 0:
+		return None
+	context.clear(0.0, 0.0, 0.0, 1.0)
+	for i,model in enumerate(model_list):
+		temp = model.color
+		model.color = ((1.0 / len(model_list)) * (i + 1), 0.0, 0.0, 1.0)
+		model.render(camera, Light(Vector3([0.0,0.0,0.0])), selection = True)
+		model.color= temp
+	red = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[0]
+	
+	red = red / 255.0
+	
+	index = int((red * len(model_list) - 1))
+	return index
+
+# Initialization of Window
 
 pygame.init()
 
@@ -610,7 +630,7 @@ gizmo = Gizmo()
 
 grid = Model(Mesh(grid(5.0,11)), color = (0,0,0,1))
 
-mesh_list.append(Model(Mesh.from_file("Template/display_area.stl"), color = (0, 1, 0, 0.25)))
+display_area = Model(Mesh.from_file("Template/display_area.stl"), color = (0, 1, 0, 0.25))
 
 
 
@@ -649,6 +669,8 @@ while running:
 				w = 1;
 				
 				
+				get_selected_mesh_index(mesh_list, camera, (pos[0],height - pos[1]))
+				
 				pv = camera.projection * camera.get_view_matrix()
 				
 				t = pv.inverse * Vector4((x,y,z,w))
@@ -664,7 +686,8 @@ while running:
 			key = event.key
 			if key == K_r:
 				camera.reset()
-				rot_y = -0.25
+				light.pos = camera.pos
+				gizmo.axis.transform.scale = Vector3([1.0, 1.0, 1.0])
 				
 			if key == K_LEFT:
 				turn_left = True
@@ -719,11 +742,11 @@ while running:
 	context.clear(0.68, 0.87, 1)
 	grid.render(camera, light, render_type = moderngl.LINES)
 	
-	for mesh in mesh_list[1:]:
+	for mesh in mesh_list:
 		mesh.render(camera, light, render_type = moderngl.TRIANGLES)
 		#mesh.lean_floor()
 	
-	mesh_list[0].render(camera, light, render_type = moderngl.TRIANGLES)
+	display_area.render(camera, light, render_type = moderngl.TRIANGLES)
 	
 	gizmo.render(camera, light)
 	
