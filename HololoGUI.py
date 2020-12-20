@@ -24,15 +24,13 @@ def grid(size, steps):
 	return np.concatenate([np.dstack([u, v, w])[:][:][0], np.dstack([v, u, w])[:][:][0]])
 
 class Transform:
-	
-	
-	def __init__(self, pos = Vector3([0,0,0]), rot = Quaternion.from_matrix(Matrix44.identity()), scale = Vector3([1,1,1])):
+	def __init__(self, pos = None, rot = None, scale = None):
 		
 		self.__model_mat = Matrix44.identity()
 		
-		self.__pos = list(pos)
-		self.__rot = list(rot)
-		self.__scale = scale
+		self.__pos = pos if pos is not None else Vector3([0.0,0.0,0.0])
+		self.__rot = rot if rot is not None else Quaternion.from_matrix(Matrix44.identity())
+		self.__scale = scale if scale is not None else Vector3([1.0,1.0,1.0])
 		self.__changed = True
 		
 	def get_transformation_matrix(self):
@@ -72,7 +70,7 @@ class Transform:
 	
 	def get_euler(self):
 		return self.__rot.axis
-
+	
 class Mesh:
 	def __init__(self, vertices, indices = None, normals = None):
 		
@@ -120,10 +118,10 @@ class Mesh:
 		return aabb.from_points(self.vertices)
 
 class Model:
-	def __init__(self, mesh, transform = Transform(), color = (.7, .5, .3 , 1.0), v_shader_path = "Shaders/model_v.shader" , f_shader_path = "Shaders/model_f.shader"):
+	def __init__(self, mesh, transform = None, color = (.7, .5, .3 , 1.0), v_shader_path = "Shaders/model_v.shader" , f_shader_path = "Shaders/model_f.shader"):
 		
 		
-		self.transform = transform
+		self.transform = transform if transform is not None else Transform()
 		self.mesh = mesh
 		
 		self.program = context.program(
@@ -158,27 +156,29 @@ class Model:
 	
 	def reload(self):
 		self.vbo.write(struct.pack("{0:d}f".format(len(self.mesh.vertices)), *self.mesh.vertices))
-
+		
 class Camera:
-	def __init__(self, pos, look_point, up = Vector3([0.0, 0.0, 1.0])):
-	
+	def __init__(self, pos, look_point, up = None):
+		
+		self.up = up if up is not None else Vector3([0.0, 0.0, 1.0])
+		print(self.up)		
 		self._init_pos = pos
 		self.pos = pos
 		self.rot = [np.arctan2(np.sqrt(self.pos[2] ** 2 + self.pos[0] ** 2), self.pos[1]),
 					np.arctan2(np.sqrt(self.pos[0] ** 2 + self.pos[1] ** 2), self.pos[2]),
 					np.arctan2(np.sqrt(self.pos[1] ** 2 + self.pos[2] ** 2), self.pos[0])]
-		self.up = up
+		
 		self.radius = np.sqrt((pos[0] - look_point[0]) ** 2 + (pos[1] - look_point[1]) ** 2 + (pos[2] - look_point[2]) ** 2)
 		self.look_point = look_point
 		
-		self.view = Matrix44.look_at(pos, look_point, up)
+		self.view = Matrix44.look_at(pos, look_point, self.up)
 		self.projection = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
 		
 		self.__changed = True
 	
 	def get_view_matrix(self):
 		if self.__changed:
-			self.view = Matrix44.look_at(self.pos, self.look_point, self.up)
+			self.view = Matrix44.look_at(list(self.pos), self.look_point, self.up)
 			self.__changed = False
 		return self.view
 		
@@ -202,6 +202,8 @@ class Camera:
 		self.pos = [np.sin(self.rot[1]) * np.cos(self.rot[2]), np.sin(self.rot[1]) * np.sin(self.rot[2]) , np.cos(self.rot[1])]
 		self.pos = [a* self.radius for a in self.pos]
 		self.__changed = True
+		
+		
 	
 	def reset(self):
 		self.pos = self._init_pos
@@ -216,69 +218,50 @@ class Light:
 		self.pos = pos
 		self.color = color
 
-class Gizmo(Transform):
-	def __init__(self, pos = (0.0, 0.0, 0.0), rot = (0.0, 0.0, 0.0), scale = 1, mesh = None, type = "", v_shader_path = "Shaders/model_v.shader", f_shader_path = "Shaders/model_f.shader"):
-		super().__init__(pos, rot, scale)
+class Gizmo:
+	def __init__(self, mesh = None, type = ""):
+		
+		
 		
 		if type == "rot":
-			scene = pyassimp.load("Template/rotate_gizmo.stl")
+			path = "Template/rotate_gizmo.stl"
 		elif type == "scale":
-			scene = pyassimp.load("Template/scale_gizmo.stl")
+			path = "Template/scale_gizmo.stl"
 		else:
-			scene = pyassimp.load("Template/move_gizmo.stl")
+			path = "Template/move_gizmo.stl"
+			
+		self.x_axis = Model(Mesh.from_file(path), color = (255, 0, 0 , 255))
+		self.y_axis = Model(Mesh.from_file(path), color = (0, 255, 0 , 255))
+		self.z_axis = Model(Mesh.from_file(path), color = (0, 0, 255 , 255))
+			
+		self.x_axis.transform.rot = Quaternion.from_y_rotation(-np.pi/2)
+		self.y_axis.transform.rot = Quaternion.from_x_rotation(np.pi/2)
 		
-		self.normals = scene.meshes[0].normals
-		self.vertices = scene.meshes[0].vertices
-		self.model_mat = Matrix44.from_translation(np.array(pos))
 		
-		vertices = np.append(self.vertices, self.normals,1)
 		
-		flatten = [j for i in vertices for j in i]
-		if mesh:
-			self.context = Shader(scale, flatten, mesh.pos)
-		else:
-			self.context = Shader(scale, flatten, self.pos)
-	def render(self):
-		color = (0, 0 , 255 , 255) 
-		proj = Matrix44.perspective_projection(45.0, width / height, 0.1, 1000.0)
+		self.rendering = True
 		
-		context.screen.color_mask = False, False, False, False
-		context.clear(depth=1.0, viewport = (width, height))
-		context.screen.color_mask = True, True, True, True
+		if mesh is not None:
+			self.x_axis.pos += mesh.transform.pos
+			self.y_axis.pos += mesh.transform.pos
+			self.z_axis.pos += mesh.transform.pos
+			
 		
-		self.context._scale.value = 1.0
-		self.context._projection.write(proj.astype('float32').tobytes())
-		self.context._view.write(camera.look_at.astype('float32').tobytes())
+	def render(self, camera,  light, render_type = moderngl.TRIANGLES):
 		
-		self.context._rotation.write(rotate.astype('float32').tobytes())
-		self.model_mat = Matrix44.identity()
-		self.context._model.write(self.model_mat.astype('float32').tobytes())
-		self.context._color.value = color
-		self.context.vao.render(moderngl.TRIANGLES)
-		
-		self.rotate(np.pi /2,0,0)
-		self.context._color.value = (0,255,0,255)
-		self.context.vao.render(moderngl.TRIANGLES)
-		
-		self.rotate(0,-np.pi /2,0)
-		self.context._color.value = (255,0,0,255)
-		self.context.vao.render(moderngl.TRIANGLES)	
+		if self.rendering:
+			context.screen.color_mask = False, False, False, False
+			context.clear(depth= 1.0, viewport = (width, height))
+			context.screen.color_mask = True, True, True, True
+			
+			self.x_axis.render(camera, light)
+			self.y_axis.render(camera, light)
+			self.z_axis.render(camera, light)
 	
-	def rotate(self, x, y, z):
-		super().rotate((x,y,z))
-		matrix = Matrix44.from_x_rotation(x)
-		matrix *= Matrix44.from_y_rotation(y)
-		matrix *= Matrix44.from_z_rotation(z)
-		self.model_mat = matrix
-		self.context._model.write(self.model_mat.astype('float32').tobytes())
-	
-	def rotate_relative(self, x, y, z):
-		super().rotate((x,y,z))
-		matrix = Matrix44.from_x_rotation(x)
-		matrix *= Matrix44.from_y_rotation(y)
-		matrix *= Matrix44.from_z_rotation(z)
-		self.model_mat *= matrix
-		self.context._model.write(self.model_mat.astype('float32').tobytes())
+	def scale(self, scale_fac):
+		self.x_axis.transform.scale = np.clip(self.x_axis.transform.scale * scale_fac, 1 * (0.9 ** 12), 1 * ((1 / 0.9) ** 15))
+		self.y_axis.transform.scale = np.clip(self.y_axis.transform.scale * scale_fac, 1 * (0.9 ** 12), 1 * ((1 / 0.9) ** 15))
+		self.z_axis.transform.scale = np.clip(self.z_axis.transform.scale * scale_fac, 1 * (0.9 ** 12), 1 * ((1 / 0.9) ** 15))
 
 class Viewport:
 	
@@ -623,7 +606,7 @@ mesh_list = []
 #scene = pyassimp.load("Template/display_area.stl")
 #mesh_list.append(Mesh(scene, pos = (0.0,0.0,0.0)))
 
-#gizmo = Gizmo()
+gizmo = Gizmo()
 
 grid = Model(Mesh(grid(5.0,11)), color = (0,0,0,1))
 
@@ -680,7 +663,6 @@ while running:
 		elif event.type == KEYDOWN:
 			key = event.key
 			if key == K_r:
-				rotate = Matrix44.identity()
 				camera.reset()
 				rot_y = -0.25
 				
@@ -703,7 +685,7 @@ while running:
 				mul = 5
 
 			# If mouse left clicked
-			if buttons[0] == 1:
+			if buttons[1] == 1:
 				if abs(delta[0]) <= width - 100 and abs(delta[1]) <= height - 100:
 					camera.rotate([0, -delta[1], -delta[0]])
 						
@@ -727,10 +709,14 @@ while running:
 		elif event.type == MOUSEWHEEL:
 				
 			camera.distance(event.y)
+			if event.y > 0:
+				gizmo.scale(Vector3([0.9, 0.9, 0.9]))
+			else:
+				gizmo.scale(Vector3([1.0 / 0.9, 1.0 / 0.9, 1.0 / 0.9]))
 	
 	
 	context.viewport = (0, 0, width, height)
-	context.clear(0.7, 0.7, 0.9)
+	context.clear(0.68, 0.87, 1)
 	grid.render(camera, light, render_type = moderngl.LINES)
 	
 	for mesh in mesh_list[1:]:
@@ -739,7 +725,7 @@ while running:
 	
 	mesh_list[0].render(camera, light, render_type = moderngl.TRIANGLES)
 	
-	#gizmo.render()
+	gizmo.render(camera, light)
 	
 	
 	viewport.render()
