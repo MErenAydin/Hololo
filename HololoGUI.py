@@ -5,6 +5,7 @@ import moderngl
 import numpy as np
 import struct
 from pyrr import Matrix44,Quaternion,Vector3, Vector4, aabb
+import pyrr
 import pygame_gui
 from PIL import Image, ImageDraw, ImageChops, ImageOps, ImageFilter
 
@@ -285,8 +286,8 @@ class Gizmo:
 		
 	def set_transform(self, value):
 		self.__transform = value.copy()
-		self.axis.transform = value.copy()
-		self.axis_t.transform = value.copy()
+		self.axis.transform.pos = value.pos.copy()
+		self.axis_t.transform.pos = value.pos.copy()
 		
 	transform = property(get_transform, set_transform)
 
@@ -578,7 +579,7 @@ def load():
 	names = fd.askopenfilenames()
 	for i, name in enumerate(names):
 		try:
-			trns = Transform(pos = Vector3([i,0,0]))
+			trns = Transform(pos = Vector3([float(i),0.0,0.0]))
 			mesh_list.append(Model(Mesh.from_file(name), trns, color = (.7, .5, .1 , 1.0)))
 		except Exception as e:
 			print(e)
@@ -589,7 +590,7 @@ def get_selected_mesh_index(model_list, camera, mouse_pos):
 	global selected_index
 
 	if len(model_list) == 0:
-		return None
+		return None, None
 	context.clear(0.0, 0.0, 0.0, 1.0)
 	
 	for i,model in enumerate(model_list):
@@ -598,21 +599,25 @@ def get_selected_mesh_index(model_list, camera, mouse_pos):
 		model.render(camera, Light(Vector3([0.0,0.0,0.0])), selection = True)
 		model.color= temp
 	
-	blue = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[2]
-	gizmo.render(camera, Light(Vector3([0.0,0.0,0.0])), selection = True)
-	
 	red = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[0]
+	gizmo.render(camera, Light(Vector3([0.0,0.0,0.0])), selection = True)
+	blue = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[2]
 	
-	axis = int(blue * 3 / 255)
+	
+	axis = int(blue * 3 / 255) - 1
 	# ss = ImageOps.flip(Image.frombytes('RGB', (1280,720), context.screen.read((width, height))))
 	# ss.show()
 	
 	red = red / 255.0
 	index = int((red * len(model_list) - 1))
+	
 	if axis != -1:
 		return selected_index, axis
 	else:
-		return index, axis
+		return index,axis
+
+def add_empty(model_list, transform):
+	model_list.append(Model(Mesh(np.array([[1.0,0.0,0.0],[-1.0,0.0,0.0],[0.0,1.0,0.0],[0.0,-1.0,0.0],[0.0,0.0,1.0],[0.0,0.0,-1.0]])), transform.copy()))
 
 # Initialization of Window
 
@@ -657,7 +662,7 @@ btn3 = Button((20,height - 40 - 140), (100, 40), "Load", "Load", viewport, handl
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
 mesh_list = []
-
+debug_mesh_list = []
 #scene = pyassimp.load("Template/display_area.stl")
 #mesh_list.append(Mesh(scene, pos = (0.0,0.0,0.0)))
 
@@ -678,9 +683,10 @@ light = Light(init_camera_pos)
 
 clock = pygame.time.Clock()
 selected_index = -1
+axis = -1
 running = True
 render_mode = False
-
+transform_from_gizmo = False
 while running:
 	
 	time_delta = clock.tick(60)/1000.0
@@ -692,6 +698,11 @@ while running:
 		if event.type == pygame.QUIT:
 			running = False
 			
+		if event.type == MOUSEBUTTONUP:
+			if event.button == 1 and axis != -1:
+				transform_from_gizmo = False
+				print(transform_from_gizmo)
+				
 		elif (event.type == MOUSEBUTTONDOWN):
 
 			pos = event.pos
@@ -699,31 +710,18 @@ while running:
 			
 			
 			if button == 1:
-				x = ((pos[0]) / (width)) *2 -1;
-				y = ((pos[1]) / (height)) * 2 -1;
-				z = 0;
-				w = 1;
 				
 				
 				
-				selected_index, axis = get_selected_mesh_index(mesh_list, camera, (pos[0],height - pos[1]))
-			
-				print(axis)
-			
-				gizmo.visible = True if selected_index != -1 else False
-			
-				if selected_index != -1:
-					gizmo.transform = mesh_list[selected_index].transform
+				if len(mesh_list):
+					selected_index, axis = get_selected_mesh_index(mesh_list, camera, (pos[0],height - pos[1]))
+					
+					gizmo.visible = True if selected_index != -1 else False
 				
-				# pv = camera.projection * camera.get_view_matrix()
-				
-				# t = pv.inverse * Vector4((x,y,z,w))
-				# transform = np.array((t.x / t.w, t.y / t.w, t.z / t.w))
-				# cam_pos = np.array(camera.pos)
-				
-				# ray = (transform - cam_pos)
-				
-				
+					if selected_index != -1 and axis != -1:
+						transform_from_gizmo = True
+						print(transform_from_gizmo)
+						gizmo.transform = mesh_list[selected_index].transform
 			
 		
 		elif event.type == KEYDOWN:
@@ -749,7 +747,44 @@ while running:
 			buttons = event.buttons
 			mul = 1
 			mod = pygame.key.get_mods()
-
+			
+			
+			if transform_from_gizmo:
+				x = ((pos[0]) / float(width)) * 2 -1;
+				y = ((height - pos[1]) / float(height)) * 2 -1;
+				z = 0;
+				w = 1;
+				
+				
+				pv = camera.projection * camera.get_view_matrix()
+				
+				t = pv.inverse * Vector4([x,y,z,w])
+				click_pos = Vector3([t.x, t.y , t.z ]) / t.w
+				
+				ray = pyrr.ray.create(camera.pos, (click_pos - camera.pos))
+				selected_mesh = mesh_list[selected_index]
+				if axis == 0:
+					
+					plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = -np.array(camera.pos))
+					intersection = pyrr.geometric_tests.ray_intersect_plane(ray, plane)
+					
+					#add_empty(debug_mesh_list, Transform(intersection))
+					selected_mesh.transform.pos = Vector3([intersection[0], selected_mesh.transform.pos.y, selected_mesh.transform.pos.z])
+					
+					
+				if axis == 1:
+					plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = [0.0,0.0,1.0])
+					intersection = pyrr.geometric_tests.ray_intersect_plane(ray, plane)
+					
+					selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, intersection[1], selected_mesh.transform.pos.z])
+					
+				if axis == 2:
+					plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = [np.cos(camera.rot[2]),np.sin(camera.rot[2]),0.0])
+					intersection = pyrr.geometric_tests.ray_intersect_plane(ray, plane)
+					
+					selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, selected_mesh.transform.pos.y, intersection[2]])
+					
+				gizmo.transform = selected_mesh.transform.copy()
 			# If pressed left or right shift transform more sensitive
 			if mod & 2 or mod & 1:
 				mul = 5
@@ -791,7 +826,9 @@ while running:
 	for i,mesh in enumerate(mesh_list):
 		mesh.render(camera, light, render_type = moderngl.TRIANGLES, selected = (i == selected_index), selection = render_mode)
 		#mesh.lean_floor()
-	
+	for mesh in debug_mesh_list:
+		mesh.render(camera, light, render_type = moderngl.LINES)
+		
 	display_area.render(camera, light, render_type = moderngl.TRIANGLES)
 	
 	gizmo.render(camera, light)
