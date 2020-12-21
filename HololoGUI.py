@@ -34,6 +34,10 @@ class Transform:
 		self.__rot = rot if rot is not None else Quaternion.from_matrix(Matrix44.identity())
 		self.__scale = scale if scale is not None else Vector3([1.0,1.0,1.0])
 		self.__changed = True
+		self.get_transformation_matrix()
+		
+	def __str__(self):
+		return "Position: {}\nRotation: {}\nScale: {}".format(self.pos,self.rot,self.scale)
 		
 	def get_transformation_matrix(self):
 		if self.__changed:
@@ -42,8 +46,6 @@ class Transform:
 			self.__model_mat = matrix * Matrix44.from_quaternion(self.rot)
 			self.__changed = False
 		return self.__model_mat
-		
-		
 		
 	def get_pos(self):
 		return self.__pos
@@ -74,7 +76,7 @@ class Transform:
 		return self.__rot.axis
 		
 	def copy(self):
-		return copy.copy(self)
+		return Transform(self.pos.copy(), self.rot.copy(), self.scale.copy())
 	
 class Mesh:
 	def __init__(self, vertices, indices = None, normals = None):
@@ -233,7 +235,7 @@ class Light:
 		self.color = color
 
 class Gizmo:
-	def __init__(self, mesh = None, type = "pos"):
+	def __init__(self, type = "pos"):
 		
 		self.__transform = Transform()
 		
@@ -252,10 +254,7 @@ class Gizmo:
 		
 		self.visible = False
 		
-		if mesh is not None:
-			self.axis.pos += mesh.transform.pos
-			
-		
+
 	def render(self, camera,  light, render_type = moderngl.TRIANGLES, selection = False):
 		
 		if self.visible:
@@ -285,9 +284,9 @@ class Gizmo:
 		return self.__transform
 		
 	def set_transform(self, value):
-		self.__transform = value
-		self.axis.transform = value
-		self.axis_t.transform = value
+		self.__transform = value.copy()
+		self.axis.transform = value.copy()
+		self.axis_t.transform = value.copy()
 		
 	transform = property(get_transform, set_transform)
 
@@ -587,6 +586,8 @@ def load():
 			mbox.showerror("Load Error" , "Could not load " + name)
 
 def get_selected_mesh_index(model_list, camera, mouse_pos):
+	global selected_index
+
 	if len(model_list) == 0:
 		return None
 	context.clear(0.0, 0.0, 0.0, 1.0)
@@ -597,17 +598,21 @@ def get_selected_mesh_index(model_list, camera, mouse_pos):
 		model.render(camera, Light(Vector3([0.0,0.0,0.0])), selection = True)
 		model.color= temp
 	
+	blue = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[2]
 	gizmo.render(camera, Light(Vector3([0.0,0.0,0.0])), selection = True)
 	
 	red = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[0]
-	blue = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[2]
+	
 	axis = int(blue * 3 / 255)
 	# ss = ImageOps.flip(Image.frombytes('RGB', (1280,720), context.screen.read((width, height))))
 	# ss.show()
 	
 	red = red / 255.0
 	index = int((red * len(model_list) - 1))
-	return index, axis
+	if axis != -1:
+		return selected_index, axis
+	else:
+		return index, axis
 
 # Initialization of Window
 
@@ -701,15 +706,14 @@ while running:
 				
 				
 				
-				if len(mesh_list):
-					selected_index, axis = get_selected_mesh_index(mesh_list, camera, (pos[0],height - pos[1]))
-				
-					print(axis)
-				
-					gizmo.visible = True if selected_index != -1 else False
-				
-					if selected_index != -1:
-						gizmo.transform.pos = mesh_list[selected_index].transform.copy().pos
+				selected_index, axis = get_selected_mesh_index(mesh_list, camera, (pos[0],height - pos[1]))
+			
+				print(axis)
+			
+				gizmo.visible = True if selected_index != -1 else False
+			
+				if selected_index != -1:
+					gizmo.transform = mesh_list[selected_index].transform
 				
 				# pv = camera.projection * camera.get_view_matrix()
 				
