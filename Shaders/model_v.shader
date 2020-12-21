@@ -12,10 +12,11 @@ uniform vec3 lightColor;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
+uniform float grow;
 
 void main()
 {
-	gl_Position = projection * view * model * vec4(aPos, 1.0);
+	gl_Position = projection * view * model * vec4(aPos + aNormal * grow, 1.0);
 
 	// gouraud shading
 	// ------------------------

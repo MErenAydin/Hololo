@@ -6,11 +6,13 @@ import numpy as np
 import struct
 from pyrr import Matrix44,Quaternion,Vector3, Vector4, aabb
 import pygame_gui
-from PIL import Image, ImageDraw, ImageChops
+from PIL import Image, ImageDraw, ImageChops, ImageOps, ImageFilter
 
 import tkinter as tk
 from tkinter import filedialog as fd 
 from tkinter import messagebox as mbox
+import os
+import copy
 
 root = tk.Tk()
 root.withdraw()
@@ -35,9 +37,9 @@ class Transform:
 		
 	def get_transformation_matrix(self):
 		if self.__changed:
-			matrix = Matrix44.from_quaternion(self.rot)
+			matrix = Matrix44.from_translation(self.pos)
 			matrix *= Matrix44.from_scale(self.scale)
-			self.__model_mat = matrix * Matrix44.from_translation(self.pos)
+			self.__model_mat = matrix * Matrix44.from_quaternion(self.rot)
 			self.__changed = False
 		return self.__model_mat
 		
@@ -70,6 +72,9 @@ class Transform:
 	
 	def get_euler(self):
 		return self.__rot.axis
+		
+	def copy(self):
+		return copy.copy(self)
 	
 class Mesh:
 	def __init__(self, vertices, indices = None, normals = None):
@@ -141,18 +146,20 @@ class Model:
 		self._light_pos = self.program['lightPos']
 		self._light_color = self.program['lightColor']
 		self._selection = self.program['selection']
+		self._grow = self.program['grow']
 		
 		self.vbo = context.buffer(struct.pack("{0:d}f".format(len(self.mesh.vertices)), *self.mesh.vertices))
 		# self.vbo = context.buffer(self.mesh.vertices.astype("f4"))
 		#self.ebo = context.buffer(self.mesh.indices.astype("uint32").tobytes())
 		self.vao = context.simple_vertex_array(self.program, self.vbo, 'aPos','aNormal')
 		
-	def render(self, camera,  light, render_type = moderngl.TRIANGLES, selection = False):
+	def render(self, camera,  light, render_type = moderngl.TRIANGLES, selection = False , selected = False):
 		
 		self._projection.write(camera.projection.astype('float32').tobytes())
 		self._view.write(camera.get_view_matrix().astype('float32').tobytes())
 		self._model.write(self.transform.get_transformation_matrix().astype('float32').tobytes())
-		self._color.value = self.color
+		self._grow.value = 0.0 if selection else 0.0 
+		self._color.value = self.color if not selected else tuple([i + 0.2 for i in self.color])
 		self._light_color.value = light.color
 		self._light_pos.value = tuple(light.pos)
 		self._selection.value = selection
@@ -160,7 +167,6 @@ class Model:
 	
 	def reload(self):
 		self.vbo.write(struct.pack("{0:d}f".format(len(self.mesh.vertices)), *self.mesh.vertices))
-
 
 class Camera:
 	def __init__(self, pos, look_point, up = None):
@@ -227,8 +233,9 @@ class Light:
 		self.color = color
 
 class Gizmo:
-	def __init__(self, mesh = None, type = ""):
-	
+	def __init__(self, mesh = None, type = "pos"):
+		
+		self.__transform = Transform()
 		
 		if type == "rot":
 			path = "Template/rotate_gizmo.stl"
@@ -236,38 +243,53 @@ class Gizmo:
 			path = "Template/scale_gizmo.stl"
 		else:
 			path = "Template/move_gizmo.stl"
-			
+		
+		self.type = type
 		self.axis = Model(Mesh.from_file(path), color = (255, 0, 0 , 255))
+		path = os.path.splitext(path)
+		self.axis_t = Model(Mesh.from_file(path[0] + "_t" + path[1]))
 		
 		
-		
-		self.visible = True
+		self.visible = False
 		
 		if mesh is not None:
 			self.axis.pos += mesh.transform.pos
 			
 		
-	def render(self, camera,  light, render_type = moderngl.TRIANGLES):
+	def render(self, camera,  light, render_type = moderngl.TRIANGLES, selection = False):
 		
 		if self.visible:
 			context.screen.color_mask = False, False, False, False
 			context.clear(depth= 1.0, viewport = (width, height))
 			context.screen.color_mask = True, True, True, True
 			
-			self.axis.transform.rot = Quaternion([0.0,0.0,0.0,1.0])
-			self.axis.color = (0, 0, 255, 255)
-			self.axis.render(camera, light)
+			temp = self.axis_t if selection else self.axis
 			
-			self.axis.transform.rot = Quaternion.from_y_rotation(-np.pi/2)
-			self.axis.color = (255, 0, 0, 255)
-			self.axis.render(camera, light)
+			temp.transform.rot = Quaternion([0.0,0.0,0.0,1.0])
+			temp.color = (0.0, 0.0, 1.0, 1.0) if selection else (0, 0, 255, 255)
+			temp.render(camera, light, selection = selection)
 			
-			self.axis.transform.rot = Quaternion.from_x_rotation(np.pi/2)
-			self.axis.color = (0, 255, 0, 255)
-			self.axis.render(camera, light)
-	
+			temp.transform.rot = Quaternion.from_y_rotation(-np.pi/2)
+			temp.color = (0.0, 0.0, 1.0 / 3.0, 1.0) if selection else (255, 0, 0, 255)
+			temp.render(camera, light, selection = selection)
+			
+			temp.transform.rot = Quaternion.from_x_rotation(np.pi/2)
+			temp.color = (0.0, 0.0, 2.0 / 3.0, 1.0) if selection else (0, 255, 0, 255)
+			temp.render(camera, light, selection = selection)
+			
 	def scale(self, scale_fac):
-		self.axis.transform.scale = np.clip(self.axis.transform.scale * scale_fac, (0.9 ** 12), ((1 / 0.9) ** 15))
+		self.axis.transform.scale = np.clip(self.axis.transform.scale * scale_fac, (0.9 ** 12), ((1.0 / 0.9) ** 15))
+		self.axis_t.transform.scale = np.clip(self.axis.transform.scale * scale_fac, (0.9 ** 12), ((1.0 / 0.9) ** 15))
+	
+	def get_transform(self):
+		return self.__transform
+		
+	def set_transform(self, value):
+		self.__transform = value
+		self.axis.transform = value
+		self.axis_t.transform = value
+		
+	transform = property(get_transform, set_transform)
 
 class Viewport:
 	
@@ -557,7 +579,8 @@ def load():
 	names = fd.askopenfilenames()
 	for i, name in enumerate(names):
 		try:
-			mesh_list.append(Model(Mesh.from_file(name), color = (.7, .5, i * .1 , 1.0)))
+			trns = Transform(pos = Vector3([i,0,0]))
+			mesh_list.append(Model(Mesh.from_file(name), trns, color = (.7, .5, .1 , 1.0)))
 		except Exception as e:
 			print(e)
 		except:
@@ -567,17 +590,24 @@ def get_selected_mesh_index(model_list, camera, mouse_pos):
 	if len(model_list) == 0:
 		return None
 	context.clear(0.0, 0.0, 0.0, 1.0)
+	
 	for i,model in enumerate(model_list):
 		temp = model.color
 		model.color = ((1.0 / len(model_list)) * (i + 1), 0.0, 0.0, 1.0)
 		model.render(camera, Light(Vector3([0.0,0.0,0.0])), selection = True)
 		model.color= temp
+	
+	gizmo.render(camera, Light(Vector3([0.0,0.0,0.0])), selection = True)
+	
 	red = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[0]
+	blue = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[2]
+	axis = int(blue * 3 / 255)
+	# ss = ImageOps.flip(Image.frombytes('RGB', (1280,720), context.screen.read((width, height))))
+	# ss.show()
 	
 	red = red / 255.0
-	
 	index = int((red * len(model_list) - 1))
-	return index
+	return index, axis
 
 # Initialization of Window
 
@@ -642,8 +672,9 @@ light = Light(init_camera_pos)
 # Main Loop
 
 clock = pygame.time.Clock()
-
+selected_index = -1
 running = True
+render_mode = False
 
 while running:
 	
@@ -669,15 +700,24 @@ while running:
 				w = 1;
 				
 				
-				get_selected_mesh_index(mesh_list, camera, (pos[0],height - pos[1]))
 				
-				pv = camera.projection * camera.get_view_matrix()
+				if len(mesh_list):
+					selected_index, axis = get_selected_mesh_index(mesh_list, camera, (pos[0],height - pos[1]))
 				
-				t = pv.inverse * Vector4((x,y,z,w))
-				transform = np.array((t.x / t.w, t.y / t.w, t.z / t.w))
-				cam_pos = np.array(camera.pos)
+					print(axis)
 				
-				ray = (transform - cam_pos)
+					gizmo.visible = True if selected_index != -1 else False
+				
+					if selected_index != -1:
+						gizmo.transform.pos = mesh_list[selected_index].transform.copy().pos
+				
+				# pv = camera.projection * camera.get_view_matrix()
+				
+				# t = pv.inverse * Vector4((x,y,z,w))
+				# transform = np.array((t.x / t.w, t.y / t.w, t.z / t.w))
+				# cam_pos = np.array(camera.pos)
+				
+				# ray = (transform - cam_pos)
 				
 				
 			
@@ -688,6 +728,9 @@ while running:
 				camera.reset()
 				light.pos = camera.pos
 				gizmo.axis.transform.scale = Vector3([1.0, 1.0, 1.0])
+				
+			if key == K_d:
+				render_mode = not render_mode
 				
 			if key == K_LEFT:
 				turn_left = True
@@ -724,7 +767,6 @@ while running:
 						pygame.mouse.set_pos([pos[0],height - 55])
 					
 					light.pos = camera.pos
-					
 					# Clear the event buffer
 					pygame.event.clear()
 
@@ -742,8 +784,8 @@ while running:
 	context.clear(0.68, 0.87, 1)
 	grid.render(camera, light, render_type = moderngl.LINES)
 	
-	for mesh in mesh_list:
-		mesh.render(camera, light, render_type = moderngl.TRIANGLES)
+	for i,mesh in enumerate(mesh_list):
+		mesh.render(camera, light, render_type = moderngl.TRIANGLES, selected = (i == selected_index), selection = render_mode)
 		#mesh.lean_floor()
 	
 	display_area.render(camera, light, render_type = moderngl.TRIANGLES)
