@@ -7,7 +7,7 @@ import struct
 from pyrr import Matrix44,Quaternion,Vector3, Vector4, aabb
 import pyrr
 import pygame_gui
-from PIL import Image, ImageDraw, ImageChops, ImageOps, ImageFilter
+from PIL import Image, ImageDraw, ImageChops, ImageOps, ImageFilter, ImageEnhance
 
 import tkinter as tk
 from tkinter import filedialog as fd 
@@ -229,6 +229,25 @@ class Camera:
 					0]
 		self.radius =  np.sqrt((self.pos[0] - self.look_point[0]) ** 2 + (self.pos[1] - self.look_point[1]) ** 2 + (self.pos[2] - self.look_point[2]) ** 2)
 		self.__changed = True
+		
+	def screen_to_world_coordinates(self,mouse_pos):
+		x = ((mouse_pos[0]) / float(width)) * 2 -1;
+		y = ((height - mouse_pos[1]) / float(height)) * 2 -1;
+		z = 0.0;
+		w = 1.0;
+		
+		
+		pv = self.projection * self.get_view_matrix()
+		
+		t = pv.inverse * Vector4([x,y,z,w])
+		return Vector3([t.x, t.y , t.z ]) / t.w
+		
+	def ray_cast(self, direction, plane, debug = False):
+		ray = pyrr.ray.create(self.pos, direction)
+		intersection = pyrr.geometric_tests.ray_intersect_plane(ray, plane)
+		if debug:
+			add_empty(debug_mesh_list, Transform(intersection))
+		return intersection
 
 class Light:
 	def __init__(self, pos, color = (1.0, 1.0, 1.0)):
@@ -236,27 +255,26 @@ class Light:
 		self.color = color
 
 class Gizmo:
-	def __init__(self, type = "pos"):
+	def __init__(self, mode = "pos"):
 		
 		self.__transform = Transform()
-		
-		if type == "rot":
-			path = "Template/rotate_gizmo.stl"
-		elif type == "scale":
-			path = "Template/scale_gizmo.stl"
-		else:
-			path = "Template/move_gizmo.stl"
-		
-		self.type = type
-		self.axis = Model(Mesh.from_file(path), color = (255, 0, 0 , 255))
-		path = os.path.splitext(path)
-		self.axis_t = Model(Mesh.from_file(path[0] + "_t" + path[1]))
-		
-		
+		self.__mode = mode
+		self.axis = None
+		self.axis_t = None
 		self.visible = False
 		
+		path = "Template/move_gizmo.stl"
+			
+		self.axis = Model(Mesh.from_file(path))
+		path = os.path.splitext(path)
+		self.axis_t = Model(Mesh.from_file(path[0] + "_t" + path[1]))
 
-	def render(self, camera,  light, render_type = moderngl.TRIANGLES, selection = False):
+	def render(self, transform, camera,  light, render_type = moderngl.TRIANGLES, selection = False):
+		
+		scale = self.transform.scale.copy()
+		self.transform = transform
+		self.transform.pos = transform.pos.copy()
+		self.transform.scale = scale
 		
 		if self.visible:
 			context.screen.color_mask = False, False, False, False
@@ -265,6 +283,7 @@ class Gizmo:
 			
 			temp = self.axis_t if selection else self.axis
 			
+			temp.transform = self.transform.copy()
 			temp.transform.rot = Quaternion([0.0,0.0,0.0,1.0])
 			temp.color = (0.0, 0.0, 1.0, 1.0) if selection else (0, 0, 255, 255)
 			temp.render(camera, light, selection = selection)
@@ -276,19 +295,39 @@ class Gizmo:
 			temp.transform.rot = Quaternion.from_x_rotation(np.pi/2)
 			temp.color = (0.0, 0.0, 2.0 / 3.0, 1.0) if selection else (0, 255, 0, 255)
 			temp.render(camera, light, selection = selection)
-			
+	
 	def scale(self, scale_fac):
-		self.axis.transform.scale = np.clip(self.axis.transform.scale * scale_fac, (0.9 ** 12), ((1.0 / 0.9) ** 15))
-		self.axis_t.transform.scale = np.clip(self.axis.transform.scale * scale_fac, (0.9 ** 12), ((1.0 / 0.9) ** 15))
+		self.transform.scale = np.clip(self.transform.scale.copy() * scale_fac, (0.9 ** 12), ((1.0 / 0.9) ** 15))
+		# self.axis.transform.scale = self.transform.scale.copy()
+		# self.axis_t.transform.scale = self.transform.scale.copy()
+		
 	
 	def get_transform(self):
 		return self.__transform
 		
 	def set_transform(self, value):
 		self.__transform = value.copy()
-		self.axis.transform.pos = value.pos.copy()
-		self.axis_t.transform.pos = value.pos.copy()
+		# self.axis.transform = value.copy()
+		# self.axis_t.transform = value.copy()
 		
+	def get_mode(self):
+		return self.__mode
+
+	def set_mode(self, value):
+		if self.__mode != value:
+			if value == "rot":
+				path = "Template/rotate_gizmo.stl"
+			elif value == "scale":
+				path = "Template/scale_gizmo.stl"
+			else:
+				path = "Template/move_gizmo.stl"
+			
+			self.axis = Model(Mesh.from_file(path), transform = self.transform.copy())
+			path = os.path.splitext(path)
+			self.axis_t = Model(Mesh.from_file(path[0] + "_t" + path[1]) ,transform = self.transform.copy())
+			self.__mode = value
+	
+	mode = property(get_mode, set_mode)
 	transform = property(get_transform, set_transform)
 
 class Viewport:
@@ -354,7 +393,7 @@ class Viewport:
 
 class Button:
 
-	def __init__(self, rect_pos, rect_size, button_name, button_text, viewport, handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , three_D = True):
+	def __init__(self, rect_pos, rect_size, button_name, viewport, button_text = "", handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , three_D = True):
 		
 		self.__hover = False
 		self.__clicked = False
@@ -373,35 +412,42 @@ class Button:
 		
 		viewport.manager.buttons[button_name] = self
 		
-		viewport.add_image(self.get_image(self.bg_color, self.text_color), self.rect_pos)
-		
-	def get_image(self, bg_color , text_color, clicked = False):
-		if self.image_path != None:
-			button_image = Image.open(self.image_path, "RGBA")
+		if image_path is not None:
+			viewport.add_image(self.get_image_from_file(self.image_path, self.rect_size), self.rect_pos)
 		else:
-			button_image = Image.new("RGBA", self.rect_size, bg_color)
-			draw = ImageDraw.Draw(button_image)
-			if self.three_D:
-				lc = [a + 30 for a in bg_color[0:3]]
-				lc.append(bg_color[3])
-				dc = [a - 30 for a in bg_color[0:3]]
-				dc.append(bg_color[3])
-				if clicked:
-					temp = lc
-					lc = dc
-					dc = temp
-				f = list(bg_color[0:3])
-				f.append(bg_color[3])
+			viewport.add_image(self.get_image(self.bg_color, self.text_color), self.rect_pos)
+		
+	def get_image_from_file(self, path, size):
+		button_image = Image.open(path)
+		button_image = button_image.resize(size, Image.ANTIALIAS)
+		
+		return button_image
+	
+	def get_image(self, bg_color , text_color, clicked = False):
+		
+		button_image = Image.new("RGBA", self.rect_size, bg_color)
+		draw = ImageDraw.Draw(button_image)
+		if self.three_D:
+			lc = [a + 30 for a in bg_color[0:3]]
+			lc.append(bg_color[3])
+			dc = [a - 30 for a in bg_color[0:3]]
+			dc.append(bg_color[3])
+			if clicked:
+				temp = lc
+				lc = dc
+				dc = temp
+			f = list(bg_color[0:3])
+			f.append(bg_color[3])
+			
+			draw.rectangle(((0, 0),(button_image.size[0] - 1, button_image.size[1] - 1)), fill = tuple(f), outline = tuple(dc), width = self.width)
+			draw.polygon(((0,0), (0,button_image.size[1] - 1), (self.width - 1, button_image.size[1] - self.width  ), (self.width - 1, self.width - 1), (button_image.size[0] - self.width, self.width - 1 ),(button_image.size[0] - 1, 0)), fill = tuple(lc))
 				
-				draw.rectangle(((0, 0),(button_image.size[0] - 1, button_image.size[1] - 1)), fill = tuple(f), outline = tuple(dc), width = self.width)
-				draw.polygon(((0,0), (0,button_image.size[1] - 1), (self.width - 1, button_image.size[1] - self.width  ), (self.width - 1, self.width - 1), (button_image.size[0] - self.width, self.width - 1 ),(button_image.size[0] - 1, 0)), fill = tuple(lc))
-					
-			
-			else:
-				draw.rectangle(((self.width // 2 - 1, self.width // 2 - 1), (self.rect_size[0] - (self.width // 2), self.rect_size[1] - (self.width // 2))), fill= self.bg_color, outline = (0,0,0,255), width = self.width)
-			
-			button_image = button_image.resize(self.rect_size)
-			
+		
+		else:
+			draw.rectangle(((self.width // 2 - 1, self.width // 2 - 1), (self.rect_size[0] - (self.width // 2), self.rect_size[1] - (self.width // 2))), fill= self.bg_color, outline = (0,0,0,255), width = self.width)
+		
+		button_image = button_image.resize(self.rect_size)
+		
 		img = font.render(self.button_text, True, text_color)
 		string_image = pygame.image.tostring(img, "RGBA", False)
 		img = Image.frombytes("RGBA", img.get_size(), string_image)
@@ -423,21 +469,29 @@ class Button:
 		if changed:
 			if value:
 				if not self.__clicked:
-					hover_color = []
-					for i in range(len(self.bg_color) - 1):
-						
-						if (self.bg_color[i] + 20 <= 255):
-							hover_color.append(self.bg_color[i] + 20)
-						else:
-							hover_color.append(self.bg_color[i])
-						
-					hover_color.append(self.bg_color[-1])
-					hover_color = tuple(hover_color)
-					img = self.get_image(hover_color, self.text_color)
-					viewport.add_image(img, self.rect_pos)
+					if self.image_path is not None:
+						enhancer = ImageEnhance.Brightness(self.get_image_from_file(self.image_path, self.rect_size))
+						img = enhancer.enhance(1.5)
+						viewport.add_image(img, self.rect_pos)
+					else:
+						hover_color = []
+						for i in range(len(self.bg_color) - 1):
+							
+							if (self.bg_color[i] + 20 <= 255):
+								hover_color.append(self.bg_color[i] + 20)
+							else:
+								hover_color.append(self.bg_color[i])
+							
+						hover_color.append(self.bg_color[-1])
+						hover_color = tuple(hover_color)
+						img = self.get_image(hover_color, self.text_color)
+						viewport.add_image(img, self.rect_pos)
 				
 			else:
-				img = self.get_image(self.bg_color, self.text_color)
+				if self.image_path is not None:
+					img = self.get_image_from_file(self.image_path, self.rect_size)
+				else:
+					img = self.get_image(self.bg_color, self.text_color)
 				viewport.add_image(img, self.rect_pos)
 		
 	hover = property(get_hover, set_hover)
@@ -452,24 +506,34 @@ class Button:
 				click_color = []
 				if self.handler:
 					self.handler()
-				for i in range(len(self.bg_color) - 1):
-					if (self.bg_color[i] - 20 >= 0):
-						click_color.append(self.bg_color[i] - 20)
-					else:
-						click_color.append(self.bg_color[i])
-				
-				
-				click_color.append(self.bg_color[-1])
-				click_color = tuple(click_color)
-				img = self.get_image(click_color, self.text_color, clicked = True)
+				if self.image_path is not None:
+					enhancer = ImageEnhance.Brightness(self.get_image_from_file(self.image_path, self.rect_size))
+					img = enhancer.enhance(0.5)
+				else:
+					for i in range(len(self.bg_color) - 1):
+						if (self.bg_color[i] - 20 >= 0):
+							click_color.append(self.bg_color[i] - 20)
+						else:
+							click_color.append(self.bg_color[i])
+					
+					
+					click_color.append(self.bg_color[-1])
+					click_color = tuple(click_color)
+					img = self.get_image(click_color, self.text_color, clicked = True)
 				viewport.add_image(img, self.rect_pos)
-				return
 			else:
 				self.__clicked = False
-				img = self.get_image(self.bg_color, self.text_color)
+				if self.image_path is not None:
+					img = self.get_image_from_file(self.image_path, self.rect_size)
+				else:
+					img = self.get_image(self.bg_color, self.text_color)
 				viewport.add_image(img, self.rect_pos)
 		else:
-			img = self.get_image(self.bg_color, self.text_color)
+			if self.image_path is not None:
+				enhancer = ImageEnhance.Brightness(self.get_image_from_file(self.image_path, self.rect_size))
+				img = enhancer.enhance(1.5)
+			else:
+				img = self.get_image(self.bg_color, self.text_color)
 			viewport.add_image(img, self.rect_pos)
 		
 	clicked = property(get_clicked, set_clicked)
@@ -492,6 +556,7 @@ class Manager:
 				for button_name in self.buttons:
 					clicked_button = self.buttons[button_name]
 					clicked_button.clicked = True
+					
 						
 		if (event.type == MOUSEBUTTONUP):
 			button = event.button
@@ -500,6 +565,7 @@ class Manager:
 					clicked_button = self.buttons[button_name]
 					if clicked_button.clicked:
 						clicked_button.clicked = False
+		
 
 	def is_collides_buttons(self, point):
 		for button_name in self.buttons:
@@ -579,12 +645,24 @@ def load():
 	names = fd.askopenfilenames()
 	for i, name in enumerate(names):
 		try:
-			trns = Transform(pos = Vector3([float(i),0.0,0.0]))
+			trns = Transform(pos = Vector3([0.0,0.0,0.0]))
 			mesh_list.append(Model(Mesh.from_file(name), trns, color = (.7, .5, .1 , 1.0)))
 		except Exception as e:
 			print(e)
 		except:
 			mbox.showerror("Load Error" , "Could not load " + name)
+
+def move():
+	global gizmo
+	gizmo.mode = "pos"
+	
+def rotate():
+	global gizmo
+	gizmo.mode = "rot"
+	
+def scale():
+	global gizmo
+	gizmo.mode = "scale"
 
 def get_selected_mesh_index(model_list, camera, mouse_pos):
 	global selected_index
@@ -600,7 +678,7 @@ def get_selected_mesh_index(model_list, camera, mouse_pos):
 		model.color= temp
 	
 	red = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[0]
-	gizmo.render(camera, Light(Vector3([0.0,0.0,0.0])), selection = True)
+	gizmo.render(model_list[selected_index].transform.copy() ,camera, Light(Vector3([0.0,0.0,0.0])), selection = True)
 	blue = context.screen.read((mouse_pos[0], mouse_pos[1], 1, 1))[2]
 	
 	
@@ -654,11 +732,17 @@ manager = Manager()
 
 viewport = Viewport(manager)
 
-btn = Button((20,height - 40 -80), (100, 40), "Render", "Render", viewport, handler = render)
+btn = Button((20,height - 40 -80), (100, 40), "Render", viewport, "Render", handler = render)
 
-btn2 = Button((20,height - 40 - 20), (100, 40), "Quit", "Quit", viewport, handler = app_quit)
+btn2 = Button((20,height - 40 - 20), (100, 40), "Quit", viewport, "Quit", handler = app_quit)
 
-btn3 = Button((20,height - 40 - 140), (100, 40), "Load", "Load", viewport, handler = load)
+btn3 = Button((20,height - 40 - 140), (100, 40), "Load", viewport, "Load", handler = load)
+
+btn4 = Button((20,height - 40 - 250), (40,40), "Scale", viewport , image_path = "Textures/scale.png", handler = scale)
+
+btn5 = Button((20,height - 40 - 310), (40,40), "Rotate", viewport , image_path = "Textures/rotate.png", handler = rotate)
+
+btn6 = Button((20,height - 40 - 370), (40,40), "Move",  viewport , image_path = "Textures/move.png", handler = move)
 
 # Testing and Importing Meshes With Assimp (https://www.assimp.org)
 mesh_list = []
@@ -684,9 +768,12 @@ light = Light(init_camera_pos)
 clock = pygame.time.Clock()
 selected_index = -1
 axis = -1
+offset = Vector3([0.0,0.0,0.0])
+
 running = True
 render_mode = False
 transform_from_gizmo = False
+
 while running:
 	
 	time_delta = clock.tick(60)/1000.0
@@ -695,13 +782,14 @@ while running:
 	for event in pygame.event.get():
 	
 		manager.update(event)
+		
 		if event.type == pygame.QUIT:
 			running = False
 			
 		if event.type == MOUSEBUTTONUP:
 			if event.button == 1 and axis != -1:
 				transform_from_gizmo = False
-				print(transform_from_gizmo)
+				gizmo.visible = True
 				
 		elif (event.type == MOUSEBUTTONDOWN):
 
@@ -711,8 +799,6 @@ while running:
 			
 			if button == 1:
 				
-				
-				
 				if len(mesh_list):
 					selected_index, axis = get_selected_mesh_index(mesh_list, camera, (pos[0],height - pos[1]))
 					
@@ -720,25 +806,40 @@ while running:
 				
 					if selected_index != -1 and axis != -1:
 						transform_from_gizmo = True
-						print(transform_from_gizmo)
-						gizmo.transform = mesh_list[selected_index].transform
-			
+						gizmo.visible = False
+						#gizmo.transform = mesh_list[selected_index].transform
+				
+				if selected_index >= 0:
+					selected_mesh = mesh_list[selected_index]
+					normal = Vector3([0.0,0.0,1.0]) if axis == 0 or axis == 1 else -np.array(camera.pos)
+					plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = normal)
+					offset = camera.ray_cast(camera.screen_to_world_coordinates(pos) - camera.pos, plane) - selected_mesh.transform.pos
 		
 		elif event.type == KEYDOWN:
 			key = event.key
 			if key == K_r:
+				gizmo.mode = "rot"
+				
+			if key == K_g:
+				gizmo.mode = "pos"
+				
+			if key == K_s:
+				gizmo.mode = "scale"
+				
+			if key == K_SPACE:
 				camera.reset()
 				light.pos = camera.pos
 				gizmo.axis.transform.scale = Vector3([1.0, 1.0, 1.0])
 				
+			if key == K_DELETE:
+				deleting_mesh = mesh_list[selected_index]
+				mesh_list.remove(deleting_mesh)
+				del deleting_mesh
+				selected_index = -1
+				
 			if key == K_d:
 				render_mode = not render_mode
-				
-			if key == K_LEFT:
-				turn_left = True
-			if key == K_RIGHT:
-				turn_right = True
-			
+
 
 		elif event.type == MOUSEMOTION:
 
@@ -750,41 +851,21 @@ while running:
 			
 			
 			if transform_from_gizmo:
-				x = ((pos[0]) / float(width)) * 2 -1;
-				y = ((height - pos[1]) / float(height)) * 2 -1;
-				z = 0;
-				w = 1;
 				
-				
-				pv = camera.projection * camera.get_view_matrix()
-				
-				t = pv.inverse * Vector4([x,y,z,w])
-				click_pos = Vector3([t.x, t.y , t.z ]) / t.w
-				
-				ray = pyrr.ray.create(camera.pos, (click_pos - camera.pos))
 				selected_mesh = mesh_list[selected_index]
+				normal = Vector3([0.0,0.0,1.0]) if axis == 0 or axis == 1 else -np.array(camera.pos)
+				plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = normal)
+				intersection = camera.ray_cast(camera.screen_to_world_coordinates(pos) - camera.pos, plane)
+				
 				if axis == 0:
-					
-					plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = -np.array(camera.pos))
-					intersection = pyrr.geometric_tests.ray_intersect_plane(ray, plane)
-					
-					#add_empty(debug_mesh_list, Transform(intersection))
-					selected_mesh.transform.pos = Vector3([intersection[0], selected_mesh.transform.pos.y, selected_mesh.transform.pos.z])
-					
-					
+					selected_mesh.transform.pos = Vector3([intersection[0] - offset[0], selected_mesh.transform.pos.y, selected_mesh.transform.pos.z])
+				
 				if axis == 1:
-					plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = [0.0,0.0,1.0])
-					intersection = pyrr.geometric_tests.ray_intersect_plane(ray, plane)
-					
-					selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, intersection[1], selected_mesh.transform.pos.z])
+					selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, intersection[1] - offset[1], selected_mesh.transform.pos.z])
 					
 				if axis == 2:
-					plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = [np.cos(camera.rot[2]),np.sin(camera.rot[2]),0.0])
-					intersection = pyrr.geometric_tests.ray_intersect_plane(ray, plane)
-					
-					selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, selected_mesh.transform.pos.y, intersection[2]])
-					
-				gizmo.transform = selected_mesh.transform.copy()
+					selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, selected_mesh.transform.pos.y, intersection[2] - offset[2]])
+
 			# If pressed left or right shift transform more sensitive
 			if mod & 2 or mod & 1:
 				mul = 5
@@ -831,7 +912,8 @@ while running:
 		
 	display_area.render(camera, light, render_type = moderngl.TRIANGLES)
 	
-	gizmo.render(camera, light)
+	if selected_index >= 0:
+		gizmo.render(mesh_list[selected_index].transform, camera, light)
 	
 	
 	viewport.render()
@@ -839,6 +921,7 @@ while running:
 	pygame.time.wait(10)
 
 	
+
 
 
 
