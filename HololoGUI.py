@@ -1,3 +1,16 @@
+
+"""
+	TODO:
+		- Multiple object selection
+		- Rotating and scaling with gizmo (and snapping with keyboard)
+		- Text input for actions
+		- Fix unselection of mesh while selecting transformation mode from screen
+		- Implement quaternion to euler
+		- Scaling gizmo with it's distance of camera 
+		
+		- Make classes seperate documents
+"""
+
 import pygame
 from pygame.locals import *
 import pyassimp
@@ -21,6 +34,7 @@ root.withdraw()
 width, height = 1280, 720
 
 def grid(size, steps):
+	# Returns numpy array of vertices of square grid which has given size and steps
 	u = np.repeat(np.linspace(-size, size, steps), 2)
 	v = np.tile([-size, size], steps)
 	w = np.zeros(steps * 2)
@@ -34,6 +48,7 @@ class Transform:
 		self.__pos = pos if pos is not None else Vector3([0.0,0.0,0.0])
 		self.__rot = rot if rot is not None else Quaternion.from_matrix(Matrix44.identity())
 		self.__scale = scale if scale is not None else Vector3([1.0,1.0,1.0])
+		# Variable for reducing calculation of transformation matrix by checking if any variable changed
 		self.__changed = True
 		self.get_transformation_matrix()
 		
@@ -45,9 +60,11 @@ class Transform:
 			matrix = Matrix44.from_translation(self.pos)
 			matrix *= Matrix44.from_scale(self.scale)
 			self.__model_mat = matrix * Matrix44.from_quaternion(self.rot)
+			
 			self.__changed = False
 		return self.__model_mat
 		
+	# Getters and setters for properties
 	def get_pos(self):
 		return self.__pos
 		
@@ -69,13 +86,16 @@ class Transform:
 		self.__scale = value
 		self.__changed = True
 		
+	# Properties
 	pos = property(get_pos, set_pos)
 	rot = property(get_rot, set_rot)
 	scale = property(get_scale, set_scale)
 	
+	# TODO: Will be implemented
 	def get_euler(self):
 		return self.__rot.axis
-		
+	
+	# Returns copy of instance
 	def copy(self):
 		return Transform(self.pos.copy(), self.rot.copy(), self.scale.copy())
 	
@@ -393,7 +413,7 @@ class Viewport:
 
 class Button:
 
-	def __init__(self, rect_pos, rect_size, button_name, viewport, button_text = "", handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , three_D = True):
+	def __init__(self, rect_pos, rect_size, button_name, viewport, button_text = "", handler = None, image_path = None, text_color = (0, 0, 0) , bg_color = (220, 220, 220, 255), o_width = 5 , three_D = False):
 		
 		self.__hover = False
 		self.__clicked = False
@@ -412,10 +432,9 @@ class Button:
 		
 		viewport.manager.buttons[button_name] = self
 		
-		if image_path is not None:
-			viewport.add_image(self.get_image_from_file(self.image_path, self.rect_size), self.rect_pos)
-		else:
-			viewport.add_image(self.get_image(self.bg_color, self.text_color), self.rect_pos)
+		self.image = self.get_image(self.bg_color, self.text_color) if self.image_path is None else self.get_image_from_file(self.image_path, self.rect_size)
+		
+		viewport.add_image(self.image, self.rect_pos)
 		
 	def get_image_from_file(self, path, size):
 		button_image = Image.open(path)
@@ -451,10 +470,6 @@ class Button:
 		img = font.render(self.button_text, True, text_color)
 		string_image = pygame.image.tostring(img, "RGBA", False)
 		img = Image.frombytes("RGBA", img.get_size(), string_image)
-		# wpercent = (self.prefered_height/float(img.size[0]))
-		# hsize = int((float(img.size[1])*float(wpercent)))
-		# img = img.resize((self.prefered_height,hsize), Image.ANTIALIAS)
-		
 		offset = (self.rect_size[0] // 2 - (img.size[0] // 2), self.rect_size[1] // 2 - (img.size[1] // 2))
 		button_image.paste(img, offset, img)
 		
@@ -469,30 +484,11 @@ class Button:
 		if changed:
 			if value:
 				if not self.__clicked:
-					if self.image_path is not None:
-						enhancer = ImageEnhance.Brightness(self.get_image_from_file(self.image_path, self.rect_size))
-						img = enhancer.enhance(1.5)
-						viewport.add_image(img, self.rect_pos)
-					else:
-						hover_color = []
-						for i in range(len(self.bg_color) - 1):
-							
-							if (self.bg_color[i] + 20 <= 255):
-								hover_color.append(self.bg_color[i] + 20)
-							else:
-								hover_color.append(self.bg_color[i])
-							
-						hover_color.append(self.bg_color[-1])
-						hover_color = tuple(hover_color)
-						img = self.get_image(hover_color, self.text_color)
-						viewport.add_image(img, self.rect_pos)
-				
+					enhancer = ImageEnhance.Brightness(self.image.copy())
+					img = enhancer.enhance(1.1)
+					viewport.add_image(img, self.rect_pos)
 			else:
-				if self.image_path is not None:
-					img = self.get_image_from_file(self.image_path, self.rect_size)
-				else:
-					img = self.get_image(self.bg_color, self.text_color)
-				viewport.add_image(img, self.rect_pos)
+				viewport.add_image(self.image, self.rect_pos)
 		
 	hover = property(get_hover, set_hover)
 	
@@ -503,37 +499,22 @@ class Button:
 		self.__clicked = value
 		if value:
 			if self.__hover:
-				click_color = []
 				if self.handler:
 					self.handler()
-				if self.image_path is not None:
-					enhancer = ImageEnhance.Brightness(self.get_image_from_file(self.image_path, self.rect_size))
-					img = enhancer.enhance(0.5)
-				else:
-					for i in range(len(self.bg_color) - 1):
-						if (self.bg_color[i] - 20 >= 0):
-							click_color.append(self.bg_color[i] - 20)
-						else:
-							click_color.append(self.bg_color[i])
 					
-					
-					click_color.append(self.bg_color[-1])
-					click_color = tuple(click_color)
-					img = self.get_image(click_color, self.text_color, clicked = True)
+				
+				if self.three_D:
+					img = self.get_image(self.bg_color, self.text_color, clicked = True)
+				enhancer = ImageEnhance.Brightness(img if self.three_D else self.image.copy())
+				img = enhancer.enhance(0.9)
+				
 				viewport.add_image(img, self.rect_pos)
 			else:
 				self.__clicked = False
-				if self.image_path is not None:
-					img = self.get_image_from_file(self.image_path, self.rect_size)
-				else:
-					img = self.get_image(self.bg_color, self.text_color)
-				viewport.add_image(img, self.rect_pos)
+				viewport.add_image(self.image, self.rect_pos)
 		else:
-			if self.image_path is not None:
-				enhancer = ImageEnhance.Brightness(self.get_image_from_file(self.image_path, self.rect_size))
-				img = enhancer.enhance(1.5)
-			else:
-				img = self.get_image(self.bg_color, self.text_color)
+			enhancer = ImageEnhance.Brightness(self.image.copy())
+			img = enhancer.enhance(1.1)
 			viewport.add_image(img, self.rect_pos)
 		
 	clicked = property(get_clicked, set_clicked)
@@ -732,11 +713,11 @@ manager = Manager()
 
 viewport = Viewport(manager)
 
-btn = Button((20,height - 40 -80), (100, 40), "Render", viewport, "Render", handler = render)
+btn = Button((20,height - 40 -80), (100, 40), "Render", viewport, "Render", handler = render, three_D = True)
 
-btn2 = Button((20,height - 40 - 20), (100, 40), "Quit", viewport, "Quit", handler = app_quit)
+btn2 = Button((20,height - 40 - 20), (100, 40), "Quit", viewport, "Quit", handler = app_quit, three_D = True)
 
-btn3 = Button((20,height - 40 - 140), (100, 40), "Load", viewport, "Load", handler = load)
+btn3 = Button((20,height - 40 - 140), (100, 40), "Load", viewport, "Load", handler = load, three_D = True)
 
 btn4 = Button((20,height - 40 - 250), (40,40), "Scale", viewport , image_path = "Textures/scale.png", handler = scale)
 
@@ -756,8 +737,6 @@ grid = Model(Mesh(grid(5.0,11)), color = (0,0,0,1))
 
 display_area = Model(Mesh.from_file("Template/display_area.stl"), color = (0, 1, 0, 0.25))
 
-
-
 init_camera_pos = Vector3([10.0, 0.0, 2.5])
 origin = (0.0,0.0,0.0)
 camera = Camera(init_camera_pos, origin)
@@ -768,8 +747,9 @@ light = Light(init_camera_pos)
 clock = pygame.time.Clock()
 selected_index = -1
 axis = -1
+last_magnitude = 1
 offset = Vector3([0.0,0.0,0.0])
-
+initial_transform = Transform()
 running = True
 render_mode = False
 transform_from_gizmo = False
@@ -780,7 +760,7 @@ while running:
 	
 	
 	for event in pygame.event.get():
-	
+		
 		manager.update(event)
 		
 		if event.type == pygame.QUIT:
@@ -796,7 +776,6 @@ while running:
 			pos = event.pos
 			button = event.button
 			
-			
 			if button == 1:
 				
 				if len(mesh_list):
@@ -811,9 +790,13 @@ while running:
 				
 				if selected_index >= 0:
 					selected_mesh = mesh_list[selected_index]
-					normal = Vector3([0.0,0.0,1.0]) if axis == 0 or axis == 1 else -np.array(camera.pos)
+					if gizmo.mode == "scale" or gizmo.mode == "rot":
+						normal = -np.array(camera.pos)
+					else:
+						normal = Vector3([0.0,0.0,1.0]) if axis == 0 or axis == 1 else -np.array(camera.pos)
 					plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = normal)
 					offset = camera.ray_cast(camera.screen_to_world_coordinates(pos) - camera.pos, plane) - selected_mesh.transform.pos
+					initial_transform = selected_mesh.transform.copy()
 		
 		elif event.type == KEYDOWN:
 			key = event.key
@@ -853,18 +836,56 @@ while running:
 			if transform_from_gizmo:
 				
 				selected_mesh = mesh_list[selected_index]
-				normal = Vector3([0.0,0.0,1.0]) if axis == 0 or axis == 1 else -np.array(camera.pos)
-				plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = normal)
-				intersection = camera.ray_cast(camera.screen_to_world_coordinates(pos) - camera.pos, plane)
 				
-				if axis == 0:
-					selected_mesh.transform.pos = Vector3([intersection[0] - offset[0], selected_mesh.transform.pos.y, selected_mesh.transform.pos.z])
-				
-				if axis == 1:
-					selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, intersection[1] - offset[1], selected_mesh.transform.pos.z])
+				if gizmo.mode == "rot":
+					pass
+					plane = pyrr.plane.create_from_position(position = selected_mesh.transform.pos, normal = -np.array(camera.pos))
+					intersection = camera.ray_cast(camera.screen_to_world_coordinates(pos) - camera.pos, plane)
 					
-				if axis == 2:
-					selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, selected_mesh.transform.pos.y, intersection[2] - offset[2]])
+					#calculate rotation
+					
+					rotation_angle = np.arccos(np.dot(intersection, offset) / (np.linalg.norm(intersection) * np.linalg.norm(offset)))
+					#rot = np.arcsin(np.dot(intersection, offset) / (np.linalg.norm(intersection) * np.linalg.norm(offset)))
+
+					
+					if axis == 0:
+						selected_mesh.transform.rot = initial_transform.rot * Quaternion.from_x_rotation(rotation_angle)
+					
+					if axis == 1:
+						selected_mesh.transform.rot = initial_transform.rot * Quaternion.from_y_rotation(rotation_angle)
+						
+					if axis == 2:
+						selected_mesh.transform.rot = initial_transform.rot * Quaternion.from_z_rotation(rotation_angle)
+					
+				elif gizmo.mode == "scale":
+					plane = pyrr.plane.create_from_position(position = selected_mesh.transform.pos, normal = -np.array(camera.pos))
+					intersection = camera.ray_cast(camera.screen_to_world_coordinates(pos) - camera.pos, plane)
+
+					magnitude = np.linalg.norm(intersection - selected_mesh.transform.pos) / np.linalg.norm(offset - selected_mesh.transform.pos)
+					
+					
+					if axis == 0:
+						selected_mesh.transform.scale = Vector3([magnitude * initial_transform.scale.x, selected_mesh.transform.scale.y, selected_mesh.transform.scale.z])
+					
+					if axis == 1:
+						selected_mesh.transform.scale = Vector3([selected_mesh.transform.scale.x, magnitude * initial_transform.scale.y, selected_mesh.transform.scale.z])
+						
+					if axis == 2:
+						selected_mesh.transform.scale = Vector3([selected_mesh.transform.scale.x, selected_mesh.transform.scale.y, magnitude * initial_transform.scale.z])
+					
+				else:
+					normal = Vector3([0.0,0.0,1.0]) if axis == 0 or axis == 1 else -np.array(camera.pos)
+					plane = pyrr.plane.create_from_position(position = selected_mesh.transform.pos, normal = normal)
+					intersection = camera.ray_cast(camera.screen_to_world_coordinates(pos) - camera.pos, plane)
+					
+					if axis == 0:
+						selected_mesh.transform.pos = Vector3([intersection[0] - offset[0], selected_mesh.transform.pos.y, selected_mesh.transform.pos.z])
+					
+					if axis == 1:
+						selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, intersection[1] - offset[1], selected_mesh.transform.pos.z])
+						
+					if axis == 2:
+						selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, selected_mesh.transform.pos.y, intersection[2] - offset[2]])
 
 			# If pressed left or right shift transform more sensitive
 			if mod & 2 or mod & 1:
