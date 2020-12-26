@@ -1,0 +1,130 @@
+from pygame.locals import *
+import pygame
+
+class Manager:
+	def __init__(self):
+		self.buttons = {}
+		self.__text = ""
+		
+	def update(self, event):
+		if (event.type == MOUSEMOTION):
+			pos = event.pos
+			rel = event.rel
+			buttons = event.buttons
+			
+			self.is_collides_buttons(pos)
+			
+		if (event.type == MOUSEBUTTONDOWN):
+			button = event.button
+			if button == 1:
+				for button_name in self.buttons:
+					clicked_button = self.buttons[button_name]
+					clicked_button.clicked = True
+			if button == 2:
+					self.text = ""			
+								
+		if (event.type == MOUSEBUTTONUP):
+			button = event.button
+			if button == 1:
+				for button_name in self.buttons:
+					clicked_button = self.buttons[button_name]
+					if clicked_button.clicked:
+						clicked_button.clicked = False
+		
+		if event.type == KEYDOWN:
+			
+			key = event.key
+			mod = pygame.key.get_mods()
+			is_shift_pressed = (mod & pygame.KMOD_LSHIFT or mod & pygame.KMOD_RSHIFT)
+			
+			if key == K_BACKSPACE:
+				self.text = self.text[:-1] if len(self.text) > 1 else ""
+				
+			if key == K_ESCAPE:
+				self.text = ""
+				
+			key_string = pygame.key.name(event.key)
+			if len(key_string) == 1:
+				if key_string == "8" and is_shift_pressed:
+					self.text += "("
+				elif key_string == "9" and is_shift_pressed:
+					self.text += ")"
+				elif key_string == "5" and is_shift_pressed:
+					self.text += "%"
+				elif key_string == "4" and is_shift_pressed:
+					self.text += "+"
+				else:
+					self.text += key_string
+			else:
+				if "[" in key_string:
+					if len(key_string.split("[")[1].split("]")[0]) == 1:
+						self.text += key_string.split("[")[1].split("]")[0]
+			
+	def get_text(self):
+		return self.__text
+		
+	def set_text(self,value):
+		changed = self.__text != value
+		self.__text = value
+		if changed:
+			self.handle_text(self.__text)
+	
+	text = property(get_text, set_text)
+	
+	def handle_text(self, in_text):
+		if not len(in_text):
+			self.text = ""
+			return
+			
+		actions = ("g", "s", "r")
+		axes = ("x", "y", "z")
+		operators = ("+", "-", "*", "/", ".", "(", ")", "%")
+		
+		text = in_text.replace(",",".")
+		last_input = text[-1]
+		
+		if not last_input.isnumeric() and last_input not in operators + actions + axes:
+			self.__text = self.__text [:-1]
+			return
+		
+		# prev_char = self.__text[-2]
+		# if len(self.__text) > 2 and (prev_char in operators or (not prev_char.isnumeric()) and last_input in operators:
+			# self.__text = self.__text [:-1]
+			# return
+			
+		if len(text) == 1 and text[0] not in actions:
+			self.__text = ""
+			return
+			
+		action = last_input if last_input in actions else "".join(set([c for c in text if c in actions]))
+		axis = last_input if last_input in axes else "".join(set([c for c in text if c in axes]))
+		# operator = last_input if last_input in operator else "".join(set([c for c in text if c in operators]))
+		
+		text = Manager.replace_multiple(text, actions + axes, "")
+		#print("Action: {}\nAxis: {}\nText: {}".format(action, axis, text))	
+		
+		try:
+			print("Result: ", eval(text))
+		except:
+			pass
+		self.__text = action + axis + text
+		print(self.__text)
+	
+	@staticmethod
+	def replace_multiple(string, replaces, replace_string):
+		for elem in replaces :
+			if elem in string :
+				string = string.replace(elem, replace_string)
+		
+		return  string
+	
+	def is_collides_buttons(self, point):
+		for button_name in self.buttons:
+					
+			button = self.buttons[button_name]
+			if (point[0] >=  button.rect_pos[0] and point[0] <= button.rect_pos[0]  + button.rect_size[0] ) and (point[1] >= button.rect_pos[1] and point[1] <= button.rect_pos[1]  + button.rect_size[1]):
+				button.hover = True
+				
+			else:
+				button.hover = False
+	
