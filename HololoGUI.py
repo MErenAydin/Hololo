@@ -6,20 +6,18 @@
 		- Text input for actions
 		- Fix unselection of mesh while selecting transformation mode from screen
 		- Implement quaternion to euler
-		- Scaling gizmo with it's distance of camera 
-		
-		- Make classes seperate documents
+		- Scaling gizmo with it's distance of camera
 """
 
 import pygame
 from pygame.locals import *
 import moderngl
 import numpy as np
-from pyrr import Matrix44,Quaternion,Vector3, Vector4
+from pyrr import Matrix44, Quaternion, Vector3, Vector4
 import pyrr
 from PIL import Image, ImageDraw, ImageChops, ImageOps, ImageFilter, ImageEnhance
 
-from GUI import Transform, Model, Mesh, Camera, Light, Viewport, Manager, Button, Gizmo, Settings
+from GUI import Transform, Model, Mesh, Camera, Light, Viewport, Manager, Button, Label, Gizmo, Settings
 from GUI.Window import context
 
 import tkinter as tk
@@ -41,64 +39,6 @@ def grid(size, steps):
 	v = np.tile([-size, size], steps)
 	w = np.zeros(steps * 2)
 	return np.concatenate([np.dstack([u, v, w])[:][:][0], np.dstack([v, u, w])[:][:][0]])
-
-
-"""# class TextInput():
-	# def __init__(self, rect_pos, rect_size, viewport, text = "", image_path = None, text_color = (0, 0, 0) , bg_color = (255, 255, 255, 255), o_width = 2):
-		# self.text_color = text_color
-		# self.__text = " "
-		# self.rect_size = rect_size
-		# self.rect_pos = rect_pos
-		# self.bg_color = bg_color
-		# self.width = o_width
-		# self.image_path = image_path
-		
-		# if image_path != None:
-			# self.text_input_image = Image.open(image_path, "RGBA")
-		# else:
-			# self.text_input_image = Image.new("RGBA", rect_size, bg_color)
-			# draw = ImageDraw.Draw(self.text_input_image)
-			# draw.rectangle(((o_width // 2 - 1, o_width // 2 - 1), (rect_size[0] - (o_width // 2), rect_size[1] - (o_width // 2))), fill= bg_color, outline = (0,0,0,255), width = o_width)
-			# self.text_input_image = self.text_input_image.resize(rect_size)
-		
-		# viewport.add_image(self.text_input_image, rect_pos)
-		
-	# def clear(self):
-		# if self.image_path != None:
-			# self.text_input_image = Image.open(self.image_path, "RGBA")
-		# else:
-			# self.text_input_image = Image.new("RGBA", self.rect_size, self.bg_color)
-			# draw = ImageDraw.Draw(self.text_input_image)
-			# draw.rectangle(((self.width // 2 - 1, self.width // 2 - 1), (self.rect_size[0] - (self.width // 2), self.rect_size[1] - (self.width // 2))), fill= self.bg_color, outline = (0,0,0,255), width = self.width)
-			# self.text_input_image = self.text_input_image.resize(self.rect_size)
-	
-	# def set_text(self, value):
-		# self.__text = value
-		
-		# self.clear()
-		
-		# img = font.render(self.__text, True, self.text_color)
-		# string_image = pygame.image.tostring(img, "RGBA", False)
-		# img = Image.frombytes("RGBA", img.get_size(), string_image)
-		
-		# h = self.rect_size[1] -2 * self.width
-		# aspect = img.size[0] / (3 * h)
-		# w = int(img.size[1] * aspect)
-		# img = img.resize((w,h), Image.ANTIALIAS)
-		
-		# offset = (self.width, self.rect_size[1] // 2 - (img.size[1] // 2))
-		# if w >= self.text_input_image.size[0] - 20:
-			# img = img.crop((img.size[0] - self.text_input_image.size[0] + (2 * self.width), 0, img.size[0], img.size[1]))
-		# self.text_input_image.paste(img, offset, img)
-		
-		# viewport.add_image(self.text_input_image, self.rect_pos)
-		
-		
-	# def get_text(self):
-		# return self.__text
-		
-	# text = property(get_text, set_text)
-"""
 
 def render():
 	print("Render")
@@ -163,42 +103,22 @@ def get_selected_mesh_index(model_list, camera, mouse_pos):
 def add_empty(model_list, transform):
 	model_list.append(Model(Mesh(np.array([[1.0,0.0,0.0],[-1.0,0.0,0.0],[0.0,1.0,0.0],[0.0,-1.0,0.0],[0.0,0.0,1.0],[0.0,0.0,-1.0]])), transform.copy()))
 
-# Initialization of Window
-
-#[print(a) for a in sorted(pygame.font.get_fonts())]
-
-#font = pygame.font.SysFont("OpenSans-Light.ttf", 50)
-# img = font.render('The quick brown fox jumps over the lazy dog', True, (0,0,255))
-
-# string_image = pygame.image.tostring(img, "RGBA", False)
-# img = Image.frombytes("RGBA", img.get_size(), string_image)
-
-
-# fbo = context.simple_framebuffer((width,height))
-# fbo.use()
-#texture = Texture((0,0), img)
+# Initializations
 
 manager = Manager()
-
 viewport = Viewport(manager)
 
 btn = Button((20,height - 40 -80), (100, 40), "Render", viewport, "Render", handler = render, three_D = True)
-
 btn2 = Button((20,height - 40 - 20), (100, 40), "Quit", viewport, "Quit", handler = app_quit, three_D = True)
-
 btn3 = Button((20,height - 40 - 140), (100, 40), "Load", viewport, "Load", handler = load, three_D = True)
-
 btn4 = Button((20,height - 40 - 250), (40,40), "Scale", viewport , image_path = "Textures/scale.png", handler = scale)
-
 btn5 = Button((20,height - 40 - 310), (40,40), "Rotate", viewport , image_path = "Textures/rotate.png", handler = rotate)
-
 btn6 = Button((20,height - 40 - 370), (40,40), "Move",  viewport , image_path = "Textures/move.png", handler = move)
 
-# Testing and Importing Meshes With Assimp (https://www.assimp.org)
+lbl = Label((20,height - 40 - 430), (100, 40), viewport, "Hello World!")
+
 mesh_list = []
 debug_mesh_list = []
-#scene = pyassimp.load("Template/display_area.stl")
-#mesh_list.append(Mesh(scene, pos = (0.0,0.0,0.0)))
 
 gizmo = Gizmo()
 
@@ -222,14 +142,14 @@ axis = -1
 last_magnitude = 1
 offset = Vector3([0.0,0.0,0.0])
 initial_transform = Transform()
-running = True
 render_mode = False
 transform_from_gizmo = False
+
+running = True
 
 while running:
 	
 	time_delta = clock.tick(60)/1000.0
-	
 	
 	for event in pygame.event.get():
 		
@@ -258,7 +178,6 @@ while running:
 					if selected_index != -1 and axis != -1:
 						transform_from_gizmo = True
 						gizmo.visible = False
-						#gizmo.transform = mesh_list[selected_index].transform
 				
 				if selected_index >= 0:
 					selected_mesh = mesh_list[selected_index]

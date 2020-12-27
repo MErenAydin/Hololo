@@ -6,5 +6,6 @@ from GUI.Camera import Camera, Light
 from GUI.Viewport import Viewport
 from GUI.Manager import Manager
 from GUI.Button import Button
+from GUI.Label import Label
 from GUI.Gizmo import Gizmo
 from GUI.Window import *
