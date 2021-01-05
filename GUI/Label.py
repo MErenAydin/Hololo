@@ -43,14 +43,14 @@ class Label():
 	
 	def set_text(self, value):
 		changed = self.__text != value
-		self.__text = value
+		self.__text = value if value != "" else " "
 		if changed:
 			image = self.image.copy()
 			
 			img = self.viewport.font.render(self.__text, True, self.text_color)
 			string_image = pygame.image.tostring(img, "RGBA", False)
 			img = Image.frombytes("RGBA", img.get_size(), string_image)
-			offset = (self.rect_size[0] // 2 - (img.size[0] // 2), self.rect_size[1] // 2 - (img.size[1] // 2))
+			offset = (10, self.rect_size[1] // 2 - (img.size[1] // 2))
 			image.paste(img, offset)
 			
 			self.viewport.add_image(image, self.rect_pos)

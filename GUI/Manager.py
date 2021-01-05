@@ -5,7 +5,11 @@ class Manager:
 	def __init__(self):
 		self.buttons = {}
 		self.__text = ""
-		
+		self.action = ""
+		self.axis = ""
+		self.result = ""
+		self.operation = ""
+
 	def update(self, event):
 		if (event.type == MOUSEMOTION):
 			pos = event.pos
@@ -20,7 +24,7 @@ class Manager:
 				for button_name in self.buttons:
 					clicked_button = self.buttons[button_name]
 					clicked_button.clicked = True
-			if button == 2:
+			if button == 3:
 					self.text = ""			
 								
 		if (event.type == MOUSEBUTTONUP):
@@ -86,11 +90,6 @@ class Manager:
 		if not last_input.isnumeric() and last_input not in operators + actions + axes:
 			self.__text = self.__text [:-1]
 			return
-		
-		# prev_char = self.__text[-2]
-		# if len(self.__text) > 2 and (prev_char in operators or (not prev_char.isnumeric()) and last_input in operators:
-			# self.__text = self.__text [:-1]
-			# return
 			
 		if len(text) == 1 and text[0] not in actions:
 			self.__text = ""
@@ -98,17 +97,18 @@ class Manager:
 			
 		action = last_input if last_input in actions else "".join(set([c for c in text if c in actions]))
 		axis = last_input if last_input in axes else "".join(set([c for c in text if c in axes]))
-		# operator = last_input if last_input in operator else "".join(set([c for c in text if c in operators]))
 		
 		text = Manager.replace_multiple(text, actions + axes, "")
-		#print("Action: {}\nAxis: {}\nText: {}".format(action, axis, text))	
 		
+		self.action = action
+		self.axis = axis
+		self.operation = text
+
 		try:
-			print("Result: ", eval(text))
+			self.result = str(eval(text))
 		except:
-			pass
+			self.result = ""
 		self.__text = action + axis + text
-		print(self.__text)
 	
 	@staticmethod
 	def replace_multiple(string, replaces, replace_string):

@@ -108,14 +108,14 @@ def add_empty(model_list, transform):
 manager = Manager()
 viewport = Viewport(manager)
 
-btn = Button((20,height - 40 -80), (100, 40), "Render", viewport, "Render", handler = render, three_D = True)
-btn2 = Button((20,height - 40 - 20), (100, 40), "Quit", viewport, "Quit", handler = app_quit, three_D = True)
-btn3 = Button((20,height - 40 - 140), (100, 40), "Load", viewport, "Load", handler = load, three_D = True)
-btn4 = Button((20,height - 40 - 250), (40,40), "Scale", viewport , image_path = "Textures/scale.png", handler = scale)
-btn5 = Button((20,height - 40 - 310), (40,40), "Rotate", viewport , image_path = "Textures/rotate.png", handler = rotate)
-btn6 = Button((20,height - 40 - 370), (40,40), "Move",  viewport , image_path = "Textures/move.png", handler = move)
+btn = Button((20,height - 40 - 40), (100, 40), "Quit", viewport, "Quit", handler = app_quit, three_D = True)
+btn2 = Button((20,height - 40 - 100), (100, 40), "Render", viewport, "Render", handler = render, three_D = True)
+btn3 = Button((20,height - 40 - 160), (100, 40), "Load", viewport, "Load", handler = load, three_D = True)
+btn4 = Button((20,height - 40 - 220), (40, 40), "Scale", viewport , image_path = "Textures/scale.png", handler = scale)
+btn5 = Button((20,height - 40 - 280), (40, 40), "Rotate", viewport , image_path = "Textures/rotate.png", handler = rotate)
+btn6 = Button((20,height - 40 - 340), (40, 40), "Move",  viewport , image_path = "Textures/move.png", handler = move)
 
-lbl = Label((20,height - 40 - 430), (100, 40), viewport, "Hello World!")
+lbl = Label((20,height - 30), (width - 40, 30), viewport, "Hello World!")
 
 mesh_list = []
 debug_mesh_list = []
@@ -154,6 +154,7 @@ while running:
 	for event in pygame.event.get():
 		
 		manager.update(event)
+		lbl.text = "{} {} {} {}".format(manager.action, manager.axis, manager.operation, manager.result)
 		
 		if event.type == pygame.QUIT:
 			running = False
