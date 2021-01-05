@@ -2,6 +2,10 @@ import pygame
 import moderngl
 from .Settings import Settings
 from pygame.locals import *
+import ctypes
+
+# Set DPI Awareness
+errorCode = ctypes.windll.shcore.SetProcessDpiAwareness(2)
 
 settings = Settings()
 pygame.init()
