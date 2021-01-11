@@ -1,4 +1,5 @@
 from pyrr import Matrix44, Quaternion, Vector3, Vector4
+import numpy as np
 
 class Transform:
 	def __init__(self, pos = None, rot = None, scale = None):
@@ -53,7 +54,17 @@ class Transform:
 	
 	# TODO: Will be implemented
 	def get_euler(self):
-		return self.__rot.axis
+		t0 = +2.0 * (self.rot.w * self.rot.x + self.rot.y * self.rot.z)
+		t1 = +1.0 - 2.0 * (self.rot.x * self.rot.x + self.rot.y * self.rot.y)
+		roll_x = np.arctan2(t0, t1)
+		t2 = +2.0 * (self.rot.w * self.rot.y - self.rot.z * self.rot.x)
+		t2 = +1.0 if t2 > +1.0 else t2
+		t2 = -1.0 if t2 < -1.0 else t2
+		pitch_y = np.arcsin(t2)
+		t3 = +2.0 * (self.rot.w * self.rot.z + self.rot.x * self.rot.y)
+		t4 = +1.0 - 2.0 * (self.rot.y * self.rot.y + self.rot.z * self.rot.z)
+		yaw_z = np.arctan2(t3, t4)
+		return roll_x, pitch_y, yaw_z
 	
 	# Returns copy of instance
 	def copy(self):
