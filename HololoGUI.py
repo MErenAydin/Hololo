@@ -17,7 +17,7 @@ from pyrr import Matrix44, Quaternion, Vector3, Vector4
 import pyrr
 from PIL import Image, ImageDraw, ImageChops, ImageOps, ImageFilter, ImageEnhance
 
-from GUI import Transform, Model, Mesh, Camera, Light, Viewport, Manager, Button, Label, Gizmo, Settings
+from GUI import Transform, Model, Mesh, Camera, Light, Viewport, Manager, Button, Label, Frame, Gizmo, Settings
 from GUI.Window import context
 
 import tkinter as tk
@@ -108,14 +108,24 @@ def add_empty(model_list, transform):
 manager = Manager()
 viewport = Viewport(manager)
 
-btn = Button((20,height - 40 - 40), (100, 40), "Quit", viewport, "Quit", handler = app_quit, three_D = True)
-btn2 = Button((20,height - 40 - 100), (100, 40), "Render", viewport, "Render", handler = render, three_D = True)
-btn3 = Button((20,height - 40 - 160), (100, 40), "Load", viewport, "Load", handler = load, three_D = True)
+frame = Frame((width - 200, 30), (200, height - 60), viewport, visible = False)
+
+btn1 = Button((20,height - 40 - 40), (40, 40), "Quit", viewport, image_path = "Textures/quit.png", handler = app_quit)
+btn2 = Button((20,height - 40 - 100), (40, 40), "Render", viewport, image_path = "Textures/export.png", handler = render)
+btn3 = Button((20,height - 40 - 160), (40, 40), "Load", viewport, image_path = "Textures/import.png", handler = load)
 btn4 = Button((20,height - 40 - 220), (40, 40), "Scale", viewport , image_path = "Textures/scale.png", handler = scale)
 btn5 = Button((20,height - 40 - 280), (40, 40), "Rotate", viewport , image_path = "Textures/rotate.png", handler = rotate)
 btn6 = Button((20,height - 40 - 340), (40, 40), "Move",  viewport , image_path = "Textures/move.png", handler = move)
 
-lbl = Label((20,height - 30), (width - 40, 30), viewport, "Hello World!")
+lbl = Label((20,height - 30), (width - 40, 30), viewport)
+
+lbl2 = Label((10,10), (180, 20), frame, "Transform:")
+lbl3 = Label((10,40), (180, 20), frame, "   Position:")
+pos_label = Label((10,70), (180, 20), frame)
+lbl4 = Label((10,100), (180, 20), frame, "   Rotation:")
+rot_label = Label((10,130), (180, 20), frame)
+lbl5 = Label((10,160), (180, 20), frame, "   Scale:")
+scale_label = Label((10,190), (180, 20), frame)
 
 mesh_list = []
 debug_mesh_list = []
@@ -327,7 +337,15 @@ while running:
 	
 	if selected_index >= 0:
 		gizmo.render(mesh_list[selected_index].transform, camera, light)
+		frame.visible = True
+		t = mesh_list[selected_index].transform
+		pos_label.text = "      ({:.2f}, {:.2f}, {:.2f})".format(t.pos.x, t.pos.y, t.pos.z)
+		yaw, pitch, roll = t.get_euler()
+		rot_label.text = "      ({:.2f}, {:.2f}, {:.2f})".format(yaw * 180 / np.pi, pitch * 180 / np.pi, roll * 180 / np.pi)
+		scale_label.text = "      ({:.2f}, {:.2f}, {:.2f})".format(t.scale.x, t.scale.y, t.scale.z)
 	
+	else:
+		frame.visible = False
 	
 	viewport.render()
 	pygame.display.flip()

@@ -8,7 +8,8 @@ class Button:
 		self.__hover = False
 		self.__clicked = False
 		
-		self.rect_pos = rect_pos
+		self.rect_pos = tuple(map(lambda a,b: a+b, rect_pos, viewport.rect_pos))
+		self.rect_rel_pos = rect_pos
 		self.rect_size = rect_size
 		self.button_name = button_name
 		self.button_text = button_text
@@ -24,7 +25,7 @@ class Button:
 		
 		self.image = self.get_image(self.bg_color, self.text_color) if self.image_path is None else self.get_image_from_file(self.image_path, self.rect_size)
 		
-		viewport.add_image(self.image, self.rect_pos)
+		viewport.add_image(self.image, self.rect_rel_pos)
 		
 	def get_image_from_file(self, path, size):
 		button_image = Image.open(path)
@@ -76,9 +77,9 @@ class Button:
 				if not self.__clicked:
 					enhancer = ImageEnhance.Brightness(self.image.copy())
 					img = enhancer.enhance(1.1)
-					self.viewport.add_image(img, self.rect_pos)
+					self.viewport.add_image(img, self.rect_rel_pos)
 			else:
-				self.viewport.add_image(self.image, self.rect_pos)
+				self.viewport.add_image(self.image, self.rect_rel_pos)
 		
 	hover = property(get_hover, set_hover)
 	
@@ -98,13 +99,13 @@ class Button:
 				enhancer = ImageEnhance.Brightness(img if self.three_D else self.image.copy())
 				img = enhancer.enhance(0.9)
 				
-				self.viewport.add_image(img, self.rect_pos)
+				self.viewport.add_image(img, self.rect_rel_pos)
 			else:
 				self.__clicked = False
-				self.viewport.add_image(self.image, self.rect_pos)
+				self.viewport.add_image(self.image, self.rect_rel_pos)
 		else:
 			enhancer = ImageEnhance.Brightness(self.image.copy())
 			img = enhancer.enhance(1.1)
-			self.viewport.add_image(img, self.rect_pos)
+			self.viewport.add_image(img, self.rect_rel_pos)
 		
 	clicked = property(get_clicked, set_clicked)

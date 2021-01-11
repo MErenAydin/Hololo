@@ -2,11 +2,12 @@ from PIL import Image
 import pygame
 
 class Label():
-	def __init__(self, rect_pos, rect_size, viewport, label_text = "", image_path = None, text_color = (0, 0, 0) , bg_color = (255, 255, 255, 0), o_width = 2):
+	def __init__(self, rect_pos, rect_size, viewport, label_text = " ", image_path = None, text_color = (0, 0, 0) , bg_color = (255, 255, 255, 0), o_width = 2):
 		self.text_color = text_color
 		self.__text = label_text
 		self.rect_size = rect_size
-		self.rect_pos = rect_pos
+		self.rect_pos = tuple(map(lambda a,b: a+b, rect_pos, viewport.rect_pos))
+		self.rect_rel_pos = rect_pos
 		self.viewport = viewport
 		self.bg_color = bg_color
 		self.width = o_width
@@ -14,7 +15,7 @@ class Label():
 		self.image = self.get_image_from_file(self.image_path, self.rect_size) if self.image_path is not None else Image.new("RGBA", self.rect_size, self.bg_color)	
 		
 		image = self.get_image()
-		self.viewport.add_image(image, self.rect_pos)
+		self.viewport.add_image(image, self.rect_rel_pos)
 	
 	def get_image_from_file(self, path, size):
 		image = Image.open(path)
@@ -27,7 +28,7 @@ class Label():
 		img = self.viewport.font.render(self.__text, True, self.text_color)
 		string_image = pygame.image.tostring(img, "RGBA", False)
 		img = Image.frombytes("RGBA", img.get_size(), string_image)
-		offset = (self.rect_size[0] // 2 - (img.size[0] // 2), self.rect_size[1] // 2 - (img.size[1] // 2))
+		offset = (0, self.rect_size[1] // 2 - (img.size[1] // 2))
 		image.paste(img, offset)
 		
 		return image
@@ -50,10 +51,10 @@ class Label():
 			img = self.viewport.font.render(self.__text, True, self.text_color)
 			string_image = pygame.image.tostring(img, "RGBA", False)
 			img = Image.frombytes("RGBA", img.get_size(), string_image)
-			offset = (10, self.rect_size[1] // 2 - (img.size[1] // 2))
+			offset = (0, self.rect_size[1] // 2 - (img.size[1] // 2))
 			image.paste(img, offset)
 			
-			self.viewport.add_image(image, self.rect_pos)
+			self.viewport.add_image(image, self.rect_rel_pos)
 		
 		
 	def get_text(self):

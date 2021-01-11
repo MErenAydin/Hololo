@@ -11,6 +11,7 @@ class Viewport:
 		
 		settings = Settings()
 		self.__image = Image.new("RGBA", (settings.width, settings.height), (0,0,0,0))
+		self.rect_pos = (0,0)
 		self.manager = manager
 		self.font = pygame.font.Font("Font/OpenSans-Regular.ttf", 16)
 		vertices = np.array([
@@ -27,8 +28,7 @@ class Viewport:
 			fragment_shader = open(f_shader_path).read(),
 			)
 			
-		#self.program['RenderMode'].value = moderngl.TEXTURE_MODE
-		
+		self.visible = True
 		self.texture = context.texture(self.image.size, 4, self.image.tobytes())
 		
 		self.texture.use(0)
@@ -48,21 +48,15 @@ class Viewport:
 		return self.__image
 		
 	def set_image(self, value):
-		diff = ImageChops.difference(self.__image.copy().convert("RGB"), value.copy().convert("RGB"))
+		#diff = ImageChops.difference(self.__image.copy().convert("RGB"), value.copy().convert("RGB"))
 		
-		if diff.getbbox():
-			self.__image = value
-			self.texture.write(self.__image.tobytes())
-			self.texture.use(0)
-		
-	def get_concat_h(self, im1, im2):
-		dst = Image.new('RGBA', (im1.width + im2.width, im1.height))
-		dst.paste(im1, (0, 0))
-		dst.paste(im2, (im1.width, 0))
-		return dst
-		
-	
+		#if diff.getbbox():
+		self.__image = value
+		self.texture.write(self.__image.tobytes())
+		self.texture.use(0)
+
 	image = property(get_image, set_image)
 	
 	def render(self):
-		self.vao.render(moderngl.TRIANGLES)
+		if self.visible:
+			self.vao.render(moderngl.TRIANGLES)
