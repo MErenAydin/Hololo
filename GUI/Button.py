@@ -1,4 +1,5 @@
 from PIL import Image, ImageDraw, ImageEnhance
+from .Texture import Texture
 import pygame
 
 class Button:
@@ -11,6 +12,8 @@ class Button:
 		self.rect_pos = tuple(map(lambda a,b: a+b, rect_pos, viewport.rect_pos))
 		self.rect_rel_pos = rect_pos
 		self.rect_size = rect_size
+
+		self.texture = Texture(rect_pos, rect_size, image = image_path)
 		self.button_name = button_name
 		self.button_text = button_text
 		self.viewport = viewport
@@ -22,6 +25,7 @@ class Button:
 		self.handler = handler
 		
 		viewport.manager.buttons[button_name] = self
+		viewport.textures.append(self.texture)
 		
 		self.image = self.get_image(self.bg_color, self.text_color) if self.image_path is None else self.get_image_from_file(self.image_path, self.rect_size)
 		

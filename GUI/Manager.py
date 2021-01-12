@@ -4,6 +4,7 @@ import pygame
 class Manager:
 	def __init__(self):
 		self.buttons = {}
+		self.textures = []
 		self.__text = ""
 		self.action = ""
 		self.axis = ""
@@ -63,6 +64,9 @@ class Manager:
 				if "[" in key_string:
 					if len(key_string.split("[")[1].split("]")[0]) == 1:
 						self.text += key_string.split("[")[1].split("]")[0]
+
+			for texture in textures:
+				texture.render()
 			
 	def get_text(self):
 		return self.__text

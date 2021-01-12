@@ -1,4 +1,6 @@
 from PIL import Image
+from .Texture import Texture
+from .Window import context
 import pygame
 
 class Label():
@@ -8,12 +10,16 @@ class Label():
 		self.rect_size = rect_size
 		self.rect_pos = tuple(map(lambda a,b: a+b, rect_pos, viewport.rect_pos))
 		self.rect_rel_pos = rect_pos
+		self.texture = Texture(rect_pos, rect_size, image = image_path)
 		self.viewport = viewport
 		self.bg_color = bg_color
 		self.width = o_width
 		self.image_path = image_path
 		self.image = self.get_image_from_file(self.image_path, self.rect_size) if self.image_path is not None else Image.new("RGBA", self.rect_size, self.bg_color)	
 		
+		self.visible = True
+		viewport.textures.append(self.texture)
+
 		image = self.get_image()
 		self.viewport.add_image(image, self.rect_rel_pos)
 	
@@ -32,15 +38,6 @@ class Label():
 		image.paste(img, offset)
 		
 		return image
-
-	# def clear(self):
-	# 	if self.image_path != None:
-	# 		self.text_input_image = Image.open(self.image_path, "RGBA")
-	# 	else:
-	# 		self.text_input_image = Image.new("RGBA", self.rect_size, self.bg_color)
-	# 		draw = ImageDraw.Draw(self.text_input_image)
-	# 		draw.rectangle(((self.width // 2 - 1, self.width // 2 - 1), (self.rect_size[0] - (self.width // 2), self.rect_size[1] - (self.width // 2))), fill= self.bg_color, outline = (0,0,0,255), width = self.width)
-	# 		self.text_input_image = self.text_input_image.resize(self.rect_size)
 	
 	def set_text(self, value):
 		changed = self.__text != value

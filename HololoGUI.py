@@ -17,7 +17,7 @@ from pyrr import Matrix44, Quaternion, Vector3, Vector4
 import pyrr
 from PIL import Image, ImageDraw, ImageChops, ImageOps, ImageFilter, ImageEnhance
 
-from GUI import Transform, Model, Mesh, Camera, Light, Viewport, Manager, Button, Label, Frame, Gizmo, Settings
+from GUI import Transform, Model, Mesh, Camera, Light, Viewport, Manager, Button, Label, Frame, Texture, Gizmo, Settings
 from GUI.Window import context
 
 import tkinter as tk
@@ -45,7 +45,7 @@ def render():
 	
 def app_quit():
 	global running
-	running = False
+	running = not mbox.askokcancel("Quit","Do you want to close?")
 	
 def load():
 	names = fd.askopenfilenames()
@@ -119,13 +119,15 @@ btn6 = Button((20,height - 40 - 340), (40, 40), "Move",  viewport , image_path =
 
 lbl = Label((20,height - 30), (width - 40, 30), viewport)
 
-lbl2 = Label((10,10), (180, 20), frame, "Transform:")
-lbl3 = Label((10,40), (180, 20), frame, "   Position:")
-pos_label = Label((10,70), (180, 20), frame)
-lbl4 = Label((10,100), (180, 20), frame, "   Rotation:")
-rot_label = Label((10,130), (180, 20), frame)
-lbl5 = Label((10,160), (180, 20), frame, "   Scale:")
-scale_label = Label((10,190), (180, 20), frame)
+lbl2 = Label((10,10), (180, 20), viewport, "Transform:")
+lbl3 = Label((10,40), (180, 20), viewport, "   Position:")
+pos_label = Label((10,70), (180, 20), viewport)
+lbl4 = Label((10,100), (180, 20), viewport, "   Rotation:")
+rot_label = Label((10,130), (180, 20), viewport)
+lbl5 = Label((10,160), (180, 20), viewport, "   Scale:")
+scale_label = Label((10,190), (180, 20), viewport)
+
+
 
 mesh_list = []
 debug_mesh_list = []
@@ -350,10 +352,6 @@ while running:
 	viewport.render()
 	pygame.display.flip()
 	pygame.time.wait(10)
-
-	
-
-
 
 
 pygame.quit()

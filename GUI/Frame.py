@@ -1,6 +1,7 @@
 from PIL import Image, ImageChops
 import pygame
 import moderngl
+from .Texture import Texture
 import numpy as np
 
 class Frame:
@@ -12,15 +13,22 @@ class Frame:
 		self.rect_pos = tuple(map(lambda a,b: a+b, rect_pos, viewport.rect_pos))
 		self.rect_rel_pos = rect_pos
 		self.rect_size = rect_size
+		self.texture = Texture(rect_pos, rect_size, image = image_path)
 		self.viewport = viewport
 		self.font = viewport.font
 		self.manager = self.viewport.manager
 		self.__visible = visible
 		self.button_list = []
 		
+		if isinstance(viewport, Frame):
+			viewport.textures.append(self.texture)
+		else:
+			viewport.textures.append(self.texture)
+
 		if self.visible:
 			viewport.add_image(self.image, self.rect_pos)
-		
+	
+	
 	def add_image(self, img, pos):
 		temp = self.image.copy()
 		temp.paste(img, pos)

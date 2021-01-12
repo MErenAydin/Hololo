@@ -9,6 +9,8 @@ class Viewport:
 	
 	def __init__(self, manager, v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
 		
+		self.textures = []
+
 		settings = Settings()
 		self.__image = Image.new("RGBA", (settings.width, settings.height), (0,0,0,0))
 		self.rect_pos = (0,0)
@@ -53,10 +55,12 @@ class Viewport:
 		#if diff.getbbox():
 		self.__image = value
 		self.texture.write(self.__image.tobytes())
-		self.texture.use(0)
+		self.texture.use()
 
 	image = property(get_image, set_image)
 	
 	def render(self):
 		if self.visible:
-			self.vao.render(moderngl.TRIANGLES)
+			for tex in self.textures:
+				tex.render()
+			#self.vao.render(moderngl.TRIANGLES)

@@ -9,4 +9,5 @@ from GUI.Button import Button
 from GUI.Label import Label
 from GUI.Frame import Frame
 from GUI.Gizmo import Gizmo
+from GUI.Texture import Texture
 from GUI.Window import *
