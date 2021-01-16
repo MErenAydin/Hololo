@@ -1,25 +1,27 @@
-from PIL import Image
+from PIL import Image, ImageOps
 from .Settings import Settings
 from .Window import context
 import moderngl
 import numpy as np
 
 class Texture:
-	def __init__(self, rect_pos, rect_size, image = None ,v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
+	def __init__(self, rect_pos, rect_size, image_path = None, bg_color = (0,0,0,0), v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
 		
 		settings = Settings()
-		self.__image = self.get_image_from_file(image, rect_size) if image is not None else Image.new("RGBA", (rect_size[0], rect_size[1]), (0,0,0,0))
+		self.__image = ImageOps.flip(self.get_image_from_file(image_path, rect_size)) if image_path is not None else Image.new("RGBA", rect_size, bg_color)
 		self.rect_pos = rect_pos
 		self.rect_size = rect_size
 		#self.manager = manager
 		#self.font = pygame.font.Font("Font/OpenSans-Regular.ttf", 16)
+		flipped_y = settings.height - rect_pos[1]
+
 		vertices = np.array([
-			rect_pos[0], rect_pos[1], 0.0, 1.0,
-			rect_pos[0] + rect_size[0], rect_pos[1], 1.0, 1.0,
-			rect_pos[0] + 0.0, rect_pos[1] + rect_size[1], 0.0, 0.0,
-			rect_pos[0], rect_pos[1] + rect_size[1], 0.0, 0.0,
-			rect_pos[0] + rect_size[0], rect_pos[1], 1.0, 1.0,
-			rect_pos[0] + rect_size[0], rect_pos[1] + rect_size[1], 1.0 ,0.0
+			rect_pos[0] + rect_size[0],	flipped_y, 				1.0, 1.0,
+			rect_pos[0], 				flipped_y, 				0.0, 1.0,
+			rect_pos[0], 				flipped_y - rect_size[1],	0.0, 0.0,
+			rect_pos[0] + rect_size[0],	flipped_y, 				1.0, 1.0,
+			rect_pos[0], 				flipped_y - rect_size[1],	0.0, 0.0,
+			rect_pos[0] + rect_size[0],	flipped_y - rect_size[1],	1.0, 0.0
 		])
 		
 		self.program = context.program( 
@@ -53,9 +55,8 @@ class Texture:
 		return self.__image
 		
 	def set_image(self, value):
-		self.__image = value
+		self.__image = ImageOps.flip(value)
 		self.texture.write(self.__image.tobytes())
-		self.texture.use()
 
 	image = property(get_image, set_image)
 	

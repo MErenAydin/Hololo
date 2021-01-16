@@ -1,11 +1,8 @@
 
 """
 	TODO:
-		- Multiple object selection
 		- Rotating and scaling with gizmo (and snapping with keyboard)
 		- Text input for actions
-		- Fix unselection of mesh while selecting transformation mode from screen
-		- Implement quaternion to euler
 		- Scaling gizmo with it's distance of camera
 """
 
@@ -17,7 +14,7 @@ from pyrr import Matrix44, Quaternion, Vector3, Vector4
 import pyrr
 from PIL import Image, ImageDraw, ImageChops, ImageOps, ImageFilter, ImageEnhance
 
-from GUI import Transform, Model, Mesh, Camera, Light, Viewport, Manager, Button, Label, Frame, Texture, Gizmo, Settings
+from GUI import Transform, Model, Mesh, Camera, Light, Viewport, Manager, Button, Label, Frame, Texture, TextTexture, Gizmo, Settings
 from GUI.Window import context
 
 import tkinter as tk
@@ -110,6 +107,8 @@ viewport = Viewport(manager)
 
 frame = Frame((width - 200, 30), (200, height - 60), viewport, visible = False)
 
+frame2 = Frame((width - 200, 430), (200, height - 460), frame)
+
 btn1 = Button((20,height - 40 - 40), (40, 40), "Quit", viewport, image_path = "Textures/quit.png", handler = app_quit)
 btn2 = Button((20,height - 40 - 100), (40, 40), "Render", viewport, image_path = "Textures/export.png", handler = render)
 btn3 = Button((20,height - 40 - 160), (40, 40), "Load", viewport, image_path = "Textures/import.png", handler = load)
@@ -117,15 +116,17 @@ btn4 = Button((20,height - 40 - 220), (40, 40), "Scale", viewport , image_path =
 btn5 = Button((20,height - 40 - 280), (40, 40), "Rotate", viewport , image_path = "Textures/rotate.png", handler = rotate)
 btn6 = Button((20,height - 40 - 340), (40, 40), "Move",  viewport , image_path = "Textures/move.png", handler = move)
 
+
+
 lbl = Label((20,height - 30), (width - 40, 30), viewport)
 
-lbl2 = Label((10,10), (180, 20), viewport, "Transform:")
-lbl3 = Label((10,40), (180, 20), viewport, "   Position:")
-pos_label = Label((10,70), (180, 20), viewport)
-lbl4 = Label((10,100), (180, 20), viewport, "   Rotation:")
-rot_label = Label((10,130), (180, 20), viewport)
-lbl5 = Label((10,160), (180, 20), viewport, "   Scale:")
-scale_label = Label((10,190), (180, 20), viewport)
+lbl2 = Label((10,10), (180, 20), frame, "Transform:")
+lbl3 = Label((10,40), (180, 20), frame, "   Position:")
+pos_label = Label((10,70), (180, 20), frame)
+lbl4 = Label((10,100), (180, 20), frame, "   Rotation:")
+rot_label = Label((10,130), (180, 20), frame)
+lbl5 = Label((10,160), (180, 20), frame, "   Scale:")
+scale_label = Label((10,190), (180, 20), frame)
 
 
 
@@ -165,7 +166,7 @@ while running:
 	
 	for event in pygame.event.get():
 		
-		manager.update(event)
+		UI_clicked = manager.update(event)
 		lbl.text = "{} {} {} {}".format(manager.action, manager.axis, manager.operation, manager.result)
 		
 		if event.type == pygame.QUIT:
@@ -184,13 +185,14 @@ while running:
 			if button == 1:
 				
 				if len(mesh_list):
-					selected_index, axis = get_selected_mesh_index(mesh_list, camera, (pos[0],height - pos[1]))
+					if not UI_clicked:
+						selected_index, axis = get_selected_mesh_index(mesh_list, camera, (pos[0],height - pos[1]))
+						
+						gizmo.visible = True if selected_index != -1 else False
 					
-					gizmo.visible = True if selected_index != -1 else False
-				
-					if selected_index != -1 and axis != -1:
-						transform_from_gizmo = True
-						gizmo.visible = False
+						if selected_index != -1 and axis != -1:
+							transform_from_gizmo = True
+							gizmo.visible = False
 				
 				if selected_index >= 0:
 					selected_mesh = mesh_list[selected_index]

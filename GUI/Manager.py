@@ -4,7 +4,6 @@ import pygame
 class Manager:
 	def __init__(self):
 		self.buttons = {}
-		self.textures = []
 		self.__text = ""
 		self.action = ""
 		self.axis = ""
@@ -12,6 +11,7 @@ class Manager:
 		self.operation = ""
 
 	def update(self, event):
+		UI_clicked = False
 		if (event.type == MOUSEMOTION):
 			pos = event.pos
 			rel = event.rel
@@ -20,13 +20,18 @@ class Manager:
 			self.is_collides_buttons(pos)
 			
 		if (event.type == MOUSEBUTTONDOWN):
+			pos = event.pos
 			button = event.button
 			if button == 1:
 				for button_name in self.buttons:
 					clicked_button = self.buttons[button_name]
 					clicked_button.clicked = True
+					collides = self.is_collides_buttons(pos)
+					if collides:
+						UI_clicked = True
+
 			if button == 3:
-					self.text = ""			
+				self.text = ""			
 								
 		if (event.type == MOUSEBUTTONUP):
 			button = event.button
@@ -64,10 +69,7 @@ class Manager:
 				if "[" in key_string:
 					if len(key_string.split("[")[1].split("]")[0]) == 1:
 						self.text += key_string.split("[")[1].split("]")[0]
-
-			for texture in textures:
-				texture.render()
-			
+		return UI_clicked
 	def get_text(self):
 		return self.__text
 		
@@ -128,7 +130,8 @@ class Manager:
 			button = self.buttons[button_name]
 			if (point[0] >=  button.rect_pos[0] and point[0] <= button.rect_pos[0]  + button.rect_size[0] ) and (point[1] >= button.rect_pos[1] and point[1] <= button.rect_pos[1]  + button.rect_size[1]):
 				button.hover = True
+				return True
 				
 			else:
 				button.hover = False
-	
+		return False
