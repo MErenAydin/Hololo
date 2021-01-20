@@ -5,10 +5,15 @@ import moderngl
 import numpy as np
 
 class Texture:
-	def __init__(self, rect_pos, rect_size, image_path = None, bg_color = (0,0,0,0), v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
+	def __init__(self, rect_pos, rect_size, image_or_path = None, bg_color = (0,0,0,0),
+				v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
 		
 		settings = Settings()
-		self.__image = ImageOps.flip(self.get_image_from_file(image_path, rect_size)) if image_path is not None else Image.new("RGBA", rect_size, bg_color)
+
+		if isinstance(image_or_path, type(Image)):
+			self.__image = image_or_path
+		else:
+			self.__image = ImageOps.flip(self.get_image_from_file(image_or_path, rect_size)) if image_or_path is not None else Image.new("RGBA", rect_size, bg_color)
 		self.rect_pos = rect_pos
 		self.rect_size = rect_size
 		#self.manager = manager

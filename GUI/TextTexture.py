@@ -15,11 +15,11 @@ class Alignment(Enum):
 
 class TextTexture(Texture):
 
-	def __init__(self, rect_pos, rect_size, text, font = "Font/OpenSans-Regular.ttf",
-		font_size = 16, font_color = (0, 0, 0, 255), alignment = Alignment.LEFT, margin = 10 ,
+	def __init__(self, rect_pos, rect_size, text, image_or_path = None, font = "Font/OpenSans-Regular.ttf",
+		font_size = 16, font_color = (0, 0, 0, 255), alignment = Alignment.LEFT, margin = (10,0) , bg_color = (255,255,255,255),
 		v_shader_path = "Shaders/texture_v.shader", f_shader_path = "Shaders/texture_f.shader"):
 		
-		super().__init__(rect_pos, rect_size, bg_color =(0,0,0,0), v_shader_path = v_shader_path, f_shader_path = f_shader_path)
+		super().__init__(rect_pos, rect_size, image_or_path = image_or_path, bg_color = bg_color, v_shader_path = v_shader_path, f_shader_path = f_shader_path)
 		self.__text = text
 		self.__font_path = font
 		self.__font_size = font_size
@@ -28,17 +28,15 @@ class TextTexture(Texture):
 		self.margin = margin
 		self.font = ImageFont.truetype(font, font_size) if "\\" in font or "/" in font else ImageFont.load(font, font_size)
 		self.font_color = font_color
-
+		self.bg_image = self.image.copy()
 		self.update_image()
 		self.__changed = False
 
-
-
 	def update_image(self):
-		image = Image.new("RGBA", self.rect_size)
+		image = self.bg_image.copy()
 		draw = ImageDraw.Draw(image)
 
-		draw.text((self.margin, self.margin), self.text, font = self.font, fill = self.font_color)
+		draw.text(self.margin, self.text, font = self.font, fill = self.font_color)
 
 		self.image = image
 		

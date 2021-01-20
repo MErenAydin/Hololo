@@ -1,17 +1,21 @@
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageFont
 from .Texture import Texture
-from .TextTexture import TextTexture
+from .TextTexture import TextTexture, Alignment
 from .Window import context
 import pygame
 
 class Label():
-	def __init__(self, rect_pos, rect_size, viewport, label_text = "", image_path = None, text_color = (0, 0, 0, 255) , bg_color = (255, 255, 255, 255), o_width = 2):
+	def __init__(self, rect_pos, rect_size, viewport, label_text = " ", image_path = None,
+				font ="Font/OpenSans-Regular.ttf", font_size = 16, text_color = (0, 0, 0),
+				alignment = Alignment.LEFT, bg_color = (255, 255, 255, 255), o_width = 2):
 		self.text_color = text_color
 		self.__text = label_text
 		self.rect_size = rect_size
 		self.rect_pos = tuple(map(lambda a,b: a+b, rect_pos, viewport.rect_pos))
 		self.rect_rel_pos = rect_pos
-		self.texture = TextTexture(self.rect_pos, rect_size, self.text, font_color = text_color, margin = 0)
+		self.font = ImageFont.truetype(font, font_size) if "\\" in font or "/" in font else ImageFont.load(font, font_size)
+		self.texture = TextTexture(self.rect_pos, rect_size, label_text, image_path, font, font_size, text_color, alignment,
+		 				(10, (self.rect_size[1]- (sum(self.font.getmetrics())) - 1) // 2), bg_color)
 		self.viewport = viewport
 		self.bg_color = bg_color
 		self.width = o_width

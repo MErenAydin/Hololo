@@ -10,7 +10,7 @@ class Manager:
 		self.result = ""
 		self.operation = ""
 
-	def update(self, event):
+	def update(self, event, viewport):
 		UI_clicked = False
 		if (event.type == MOUSEMOTION):
 			pos = event.pos
@@ -26,8 +26,10 @@ class Manager:
 				for button_name in self.buttons:
 					clicked_button = self.buttons[button_name]
 					clicked_button.clicked = True
-					collides = self.is_collides_buttons(pos)
-					if collides:
+					self.is_collides_buttons(pos)
+				
+				for element in viewport.elements:
+					if self.is_collides_element(element.rect_pos, element.rect_size, pos):
 						UI_clicked = True
 
 			if button == 3:
@@ -69,6 +71,7 @@ class Manager:
 				if "[" in key_string:
 					if len(key_string.split("[")[1].split("]")[0]) == 1:
 						self.text += key_string.split("[")[1].split("]")[0]
+
 		return UI_clicked
 	def get_text(self):
 		return self.__text
@@ -124,6 +127,12 @@ class Manager:
 		
 		return  string
 	
+	def is_collides_element(self, rect_pos, rect_size, mouse_pos):
+		if (mouse_pos[0] >=  rect_pos[0] and mouse_pos[0] <= rect_pos[0]  + rect_size[0] ) and \
+			(mouse_pos[1] >= rect_pos[1] and mouse_pos[1] <= rect_pos[1]  + rect_size[1]):
+			return True
+		return False
+
 	def is_collides_buttons(self, point):
 		for button_name in self.buttons:
 					

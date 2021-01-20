@@ -14,6 +14,7 @@ class Viewport:
 
 		settings = Settings()
 		self.rect_pos = (0,0)
+		self.rect_rel_pos = (0,0)
 		self.manager = manager
 		self.visible = True
 
@@ -23,12 +24,14 @@ class Viewport:
 	def render(self):
 		#if self.visible:
 		context.disable(moderngl.DEPTH_TEST)
+		context.disable(moderngl.CULL_FACE)
 		for element in self.elements:
 			if isinstance(element, Frame):
 				element.render()
 			else:
 				element.texture.render()
 		context.enable(moderngl.DEPTH_TEST)
+		context.enable(moderngl.CULL_FACE)
 
 	def add_image(self,image,rect_size):
 		pass

@@ -16,7 +16,7 @@ class Button:
 		self.rect_rel_pos = rect_pos
 		self.rect_size = rect_size
 
-		self.texture = Texture(rect_pos, rect_size, image_path = image_path)
+		self.texture = Texture(rect_pos, rect_size, image_or_path = image_path)
 		self.button_name = button_name
 		self.button_text = button_text
 		self.viewport = viewport
