@@ -5,17 +5,17 @@
 		- Text input for actions
 		- Scaling gizmo with it's distance of camera
 """
-
-import pygame
-from pygame.locals import *
+import sdl2
+import ctypes
 import moderngl
 import numpy as np
 from pyrr import Matrix44, Quaternion, Vector3, Vector4
 import pyrr
 from PIL import Image, ImageDraw, ImageChops, ImageOps, ImageFilter, ImageEnhance
 
-from GUI import Transform, Model, Mesh, Camera, Light, Viewport, Manager, Button, Label, Frame, Texture, TextTexture, Gizmo, Settings
-from GUI.Window import context
+from GUI import Transform, Model, Mesh, Camera, Light, Viewport, Manager, Button, Label, Frame,\
+	 Texture, TextTexture, TextInput, Gizmo, Settings
+from GUI.Window import context, window
 
 import tkinter as tk
 from tkinter import filedialog as fd 
@@ -101,13 +101,12 @@ def add_empty(model_list, transform):
 	model_list.append(Model(Mesh(np.array([[1.0,0.0,0.0],[-1.0,0.0,0.0],[0.0,1.0,0.0],[0.0,-1.0,0.0],[0.0,0.0,1.0],[0.0,0.0,-1.0]])), transform.copy()))
 
 # Initializations
-
 manager = Manager()
 viewport = Viewport(manager)
 
 frame = Frame((width - 200, 30), (200, height - 60), viewport, visible = False)
 
-frame2 = Frame((width - 200, 430), (200, height - 460), frame)
+frame2 = Frame((0, 430), (200, height - 560), frame)
 
 btn1 = Button((20,height - 40 - 40), (40, 40), "Quit", viewport, image_path = "Textures/quit.png", handler = app_quit)
 btn2 = Button((20,height - 40 - 100), (40, 40), "Render", viewport, image_path = "Textures/export.png", handler = render)
@@ -116,17 +115,17 @@ btn4 = Button((20,height - 40 - 220), (40, 40), "Scale", viewport , image_path =
 btn5 = Button((20,height - 40 - 280), (40, 40), "Rotate", viewport , image_path = "Textures/rotate.png", handler = rotate)
 btn6 = Button((20,height - 40 - 340), (40, 40), "Move",  viewport , image_path = "Textures/move.png", handler = move)
 
+t_input = TextInput((500,500), (150, 30), viewport, "deneme", image_path = "Textures/input.png")
 
+lbl = Label((20,height - 30), (width - 40, 30), viewport, bg_color = (0,0,0,0))
 
-lbl = Label((20,height - 30), (width - 40, 30), viewport)
-
-lbl2 = Label((10,10), (180, 20), frame, "Transform:")
-lbl3 = Label((10,40), (180, 20), frame, "   Position:")
-pos_label = Label((10,70), (180, 20), frame)
-lbl4 = Label((10,100), (180, 20), frame, "   Rotation:")
-rot_label = Label((10,130), (180, 20), frame)
-lbl5 = Label((10,160), (180, 20), frame, "   Scale:")
-scale_label = Label((10,190), (180, 20), frame)
+lbl2 = Label((10,10), (180, 20), frame, "Transform:", bg_color = (0,0,0,0))
+lbl3 = Label((10,40), (180, 20), frame, "   Position:", bg_color = (0,0,0,0))
+pos_label = Label((10,70), (180, 20), frame, bg_color = (0,0,0,0), image_path = "Textures/input.png")
+lbl4 = Label((10,100), (180, 20), frame, "   Rotation:", bg_color = (0,0,0,0))
+rot_label = Label((10,130), (180, 20), frame, bg_color = (0,0,0,0), image_path = "Textures/input.png")
+lbl5 = Label((10,160), (180, 20), frame, "   Scale:", bg_color = (0,0,0,0))
+scale_label = Label((10,190), (180, 20), frame, bg_color = (0,0,0,0), image_path = "Textures/input.png")
 
 
 
@@ -149,7 +148,6 @@ camera = Camera(init_camera_pos, origin)
 light = Light(init_camera_pos)
 # Main Loop
 
-clock = pygame.time.Clock()
 selected_index = -1
 axis = -1
 last_magnitude = 1
@@ -159,28 +157,29 @@ render_mode = False
 transform_from_gizmo = False
 
 running = True
-
+test = ""
 while running:
 	
-	time_delta = clock.tick(60)/1000.0
-	
-	for event in pygame.event.get():
-		
-		UI_clicked = manager.update(event)
+	event = sdl2.SDL_Event()
+	sdl2.SDL_CaptureMouse(10)
+	while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
+		UI_clicked = manager.update(event, viewport)
 		lbl.text = "{} {} {} {}".format(manager.action, manager.axis, manager.operation, manager.result)
-		
-		if event.type == pygame.QUIT:
+
+		if event.type == sdl2.SDL_QUIT:
 			running = False
-			
-		if event.type == MOUSEBUTTONUP:
-			if event.button == 1 and axis != -1:
+		elif event.type == sdl2.SDL_TEXTINPUT:
+			test += event.text.text.decode("utf-8")
+			print(test)
+
+		elif event.type == sdl2.SDL_MOUSEBUTTONUP:
+			if event.button.button & 1 and axis != -1:
 				transform_from_gizmo = False
 				gizmo.visible = True
-				
-		elif (event.type == MOUSEBUTTONDOWN):
 
-			pos = event.pos
-			button = event.button
+		elif event.type == sdl2.SDL_MOUSEBUTTONDOWN:
+			pos = (event.motion.x, event.motion.y)
+			button = event.button.button
 			
 			if button == 1:
 				
@@ -203,45 +202,13 @@ while running:
 					plane = pyrr.plane.create_from_position(position = mesh_list[selected_index].transform.pos, normal = normal)
 					offset = camera.ray_cast(camera.screen_to_world_coordinates(pos) - camera.pos, plane) - selected_mesh.transform.pos
 					initial_transform = selected_mesh.transform.copy()
-		
-		elif event.type == KEYDOWN:
-			key = event.key
-			if key == K_r:
-				gizmo.mode = "rot"
-				
-			if key == K_g:
-				gizmo.mode = "pos"
-				
-			if key == K_s:
-				gizmo.mode = "scale"
-				
-			#if key == K_ENTER:
-			#	#apply input text
-			#	pass
-				
-			if key == K_SPACE:
-				camera.reset()
-				light.pos = camera.pos
-				gizmo.axis.transform.scale = Vector3([1.0, 1.0, 1.0])
-				
-			if key == K_DELETE:
-				deleting_mesh = mesh_list[selected_index]
-				mesh_list.remove(deleting_mesh)
-				del deleting_mesh
-				selected_index = -1
-				
-			if key == K_d:
-				render_mode = not render_mode
-
-		elif event.type == MOUSEMOTION:
-
-			pos = event.pos
-			delta = event.rel
-			buttons = event.buttons
+			
+		elif event.type == sdl2.SDL_MOUSEMOTION:
+			pos = (event.motion.x, event.motion.y)
+			delta = (event.motion.xrel, event.motion.yrel)
+			button = event.button.button
 			mul = 1
-			mod = pygame.key.get_mods()
-			
-			
+
 			if transform_from_gizmo:
 				
 				selected_mesh = mesh_list[selected_index]
@@ -292,40 +259,62 @@ while running:
 						
 					if axis == 2:
 						selected_mesh.transform.pos = Vector3([selected_mesh.transform.pos.x, selected_mesh.transform.pos.y, intersection[2] - offset[2]])
-
-			# If pressed left or right shift transform more sensitive
-			if mod & 2 or mod & 1:
-				mul = 5
-
-			# If mouse left clicked
-			if buttons[1] == 1:
+			if button & 2:
 				if abs(delta[0]) <= width - 100 and abs(delta[1]) <= height - 100:
 					camera.rotate([0, -delta[1], -delta[0]])
 						
 
 					# Do not let the mouse pointer go out of boundaries while transforming 
-					if pos[0] >= width - 50:
-						pygame.mouse.set_pos([55,pos[1]])
-					elif pos[0] <= 50:
-						pygame.mouse.set_pos([width - 55,pos[1]])
-					if pos[1] >= height - 50:
-						pygame.mouse.set_pos([pos[0],55])
-					elif pos[1] <= 50:
-						pygame.mouse.set_pos([pos[0],height - 55])
+					if pos[0] >= width:
+						sdl2.SDL_WarpMouseInWindow(window.window, 0, pos[1])
+					elif pos[0] <= 0:
+						sdl2.SDL_WarpMouseInWindow(window.window, width, pos[1])
+					if pos[1] >= height:
+						sdl2.SDL_WarpMouseInWindow(window.window, pos[0], 0)
+					elif pos[1] <= 0:
+						sdl2.SDL_WarpMouseInWindow(window.window, pos[0], height)
 					
 					light.pos = camera.pos
 					# Clear the event buffer
-					pygame.event.clear()
 
-		# If mouse scroll moved
-		elif event.type == MOUSEWHEEL:
+		elif event.type == sdl2.SDL_KEYDOWN:
+			key = event.key.keysym.sym
+			if key == sdl2.SDLK_r:
+				gizmo.mode = "rot"
 				
-			camera.distance(event.y)
-			if event.y > 0:
+			if key == sdl2.SDLK_g:
+				gizmo.mode = "pos"
+				
+			if key == sdl2.SDLK_s:
+				gizmo.mode = "scale"
+				
+			#if key == K_ENTER:
+			#	#apply input text
+			#	pass
+				
+			if key == sdl2.SDLK_SPACE:
+				camera.reset()
+				light.pos = camera.pos
+				gizmo.axis.transform.scale = Vector3([1.0, 1.0, 1.0])
+				
+			if key == sdl2.SDLK_DELETE:
+				deleting_mesh = mesh_list[selected_index]
+				mesh_list.remove(deleting_mesh)
+				del deleting_mesh
+				selected_index = -1
+				
+			if key == sdl2.SDLK_d:
+				render_mode = not render_mode
+	
+
+		elif event.type == sdl2.SDL_MOUSEWHEEL:
+			scroll = event.wheel.y
+			camera.distance(scroll)
+			if scroll > 0:
 				gizmo.scale(Vector3([0.9, 0.9, 0.9]))
 			else:
 				gizmo.scale(Vector3([1.0 / 0.9, 1.0 / 0.9, 1.0 / 0.9]))
-	
+
 	
 	context.viewport = (0, 0, width, height)
 	context.clear(0.68, 0.87, 1)
@@ -352,8 +341,14 @@ while running:
 		frame.visible = False
 	
 	viewport.render()
-	pygame.display.flip()
-	pygame.time.wait(10)
+	#pygame.display.flip()
+	#pygame.time.wait(10)
+	sdl2.SDL_GL_SwapWindow(window.window)
+	sdl2.SDL_Delay(10)
+
+sdl2.SDL_GL_DeleteContext(window.sdl_context)
+sdl2.SDL_DestroyWindow(window.window)
+sdl2.SDL_Quit()
 
 
-pygame.quit()
+#pygame.quit()

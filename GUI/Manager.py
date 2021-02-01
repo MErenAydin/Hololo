@@ -1,5 +1,4 @@
-from pygame.locals import *
-import pygame
+import sdl2
 
 class Manager:
 	def __init__(self):
@@ -12,17 +11,14 @@ class Manager:
 
 	def update(self, event, viewport):
 		UI_clicked = False
-		if (event.type == MOUSEMOTION):
-			pos = event.pos
-			rel = event.rel
-			buttons = event.buttons
-			
+		if (event.type == sdl2.SDL_MOUSEMOTION):
+			pos = (event.motion.x, event.motion.y)
 			self.is_collides_buttons(pos)
 			
-		if (event.type == MOUSEBUTTONDOWN):
-			pos = event.pos
-			button = event.button
-			if button == 1:
+		if (event.type == sdl2.SDL_MOUSEBUTTONDOWN):
+			pos = (event.motion.x, event.motion.y)
+			button = event.button.button
+			if button & 1:
 				for button_name in self.buttons:
 					clicked_button = self.buttons[button_name]
 					clicked_button.clicked = True
@@ -32,20 +28,20 @@ class Manager:
 					if self.is_collides_element(element.rect_pos, element.rect_size, pos):
 						UI_clicked = True
 
-			if button == 3:
+			if button & 4:
 				self.text = ""			
 								
-		if (event.type == MOUSEBUTTONUP):
-			button = event.button
-			if button == 1:
+		if event.type == sdl2.SDL_MOUSEBUTTONUP:
+			button = event.button.button
+			if button & 1:
 				for button_name in self.buttons:
 					clicked_button = self.buttons[button_name]
 					if clicked_button.clicked:
 						clicked_button.clicked = False
-		
-		if event.type == KEYDOWN:
+		"""
+		if event.type == sdl2.SDL_KEYDOWN:
 			
-			key = event.key
+			key = event.key.key
 			mod = pygame.key.get_mods()
 			is_shift_pressed = (mod & pygame.KMOD_LSHIFT or mod & pygame.KMOD_RSHIFT)
 			
@@ -71,7 +67,7 @@ class Manager:
 				if "[" in key_string:
 					if len(key_string.split("[")[1].split("]")[0]) == 1:
 						self.text += key_string.split("[")[1].split("]")[0]
-
+		"""
 		return UI_clicked
 	def get_text(self):
 		return self.__text

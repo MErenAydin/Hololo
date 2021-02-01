@@ -1,5 +1,4 @@
 from PIL import Image, ImageChops
-import pygame
 import moderngl
 from .Texture import Texture
 from .Window import context

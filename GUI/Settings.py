@@ -15,6 +15,7 @@ class Settings(metaclass = Singleton):
 		except FileNotFoundError:
 			#Initial Settings
 			settings = {
+				"window_title" : "Hololo",
 				"screen_size" : (1280, 720),
 				"init_obj_path" : "Template/test.stl",
 			}
@@ -23,5 +24,6 @@ class Settings(metaclass = Singleton):
 		except Exception as e:
 			print(type(e).__name__, e.args)
 
+		self.window_title = settings["window_title"]
 		self.width, self.height = settings["screen_size"]
 		self.init_obj_path = settings["init_obj_path"]

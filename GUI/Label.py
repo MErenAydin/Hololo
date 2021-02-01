@@ -2,7 +2,6 @@ from PIL import Image, ImageOps, ImageFont
 from .Texture import Texture
 from .TextTexture import TextTexture, Alignment
 from .Window import context
-import pygame
 
 class Label():
 	def __init__(self, rect_pos, rect_size, viewport, label_text = " ", image_path = None,

@@ -2,7 +2,6 @@ from PIL import Image, ImageChops
 from .Settings import Settings
 from .Frame import Frame
 from .Window import context
-import pygame
 import moderngl
 import numpy as np
 

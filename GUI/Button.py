@@ -1,6 +1,5 @@
-from PIL import Image, ImageDraw, ImageEnhance,ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageOps, ImageFont
 from .Texture import Texture
-import pygame
 
 class Button:
 
@@ -10,7 +9,7 @@ class Button:
 		
 		self.__hover = False
 		self.__clicked = False
-		self.font = pygame.font.Font(font, font_size)
+		self.font = ImageFont.truetype(font, font_size) if "\\" in font or "/" in font else ImageFont.load(font, font_size)
 		
 		self.rect_pos = tuple(map(lambda a,b: a+b, rect_pos, viewport.rect_pos))
 		self.rect_rel_pos = rect_pos
